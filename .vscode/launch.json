@@ -1,0 +1,19 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": ".NET Watch (Hot Reload)",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "watch",
+			"program": "${workspaceFolder}/bin/Debug/net8.0-windows/Mutelith.exe",
+			"args": [],
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal",
+			"stopAtEntry": false,
+			"env": {
+				"DOTNET_WATCH_SUPPRESS_EMOJIS": "1"
+			}
+		}
+	]
+}

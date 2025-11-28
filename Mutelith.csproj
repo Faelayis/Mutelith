@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<PublishSingleFile>true</PublishSingleFile>
+		<EnableComHosting>true</EnableComHosting>
+		<SelfContained>false</SelfContained>
+		<Version>0.0.0</Version>
+		<FileVersion>0.0.0</FileVersion>
+		<AssemblyVersion>0.0.0.0</AssemblyVersion>
+		<Authors>Faelayis</Authors>
+		<Company>Faelayis</Company>
+		<Title>Mutelith</Title>
+		<Product>Mutelith</Product>
+		<Description>Automatically fixes screen sharing echo issues</Description>
+		<Copyright>© 2025 Faelayis. All rights reserved.</Copyright>
+		<RepositoryUrl>https://github.com/Faelayis/Mutelith</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageProjectUrl>https://github.com/Faelayis/Mutelith</PackageProjectUrl>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageTags>discord;audio;echo;fix;steelseries;sonar;fxsound</PackageTags>
+		<ApplicationIcon>
+		</ApplicationIcon>
+		<Win32Resource>
+		</Win32Resource>
+		<NeutralLanguage>en</NeutralLanguage>
+	</PropertyGroup>
+	<ItemGroup>
+		<AssemblyMetadata Include="RepositoryUrl" Value="$(RepositoryUrl)" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="NAudio" Version="2.2.1" />
+		<PackageReference Include="Octokit" Version="13.0.1" />
+	</ItemGroup>
+</Project>

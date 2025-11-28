@@ -1,0 +1,186 @@
+name: 🚀 Publish Release
+
+on:
+   workflow_dispatch:
+      inputs:
+         version_type:
+            description: "Version bump type"
+            required: true
+            default: "patch"
+            type: choice
+            options:
+               - patch
+               - minor
+               - major
+               - none
+
+jobs:
+   build-and-release:
+      runs-on: windows-latest
+
+      steps:
+         - name: Checkout code
+           uses: actions/checkout@v4
+           with:
+              fetch-depth: 0
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+         - name: Setup .NET
+           uses: actions/setup-dotnet@v4
+           with:
+              dotnet-version: "8.0.x"
+
+         - name: Get current version
+           id: current_version
+           shell: pwsh
+           run: |
+              [xml]$csproj = Get-Content "Mutelith.csproj"
+              $currentVersion = $csproj.Project.PropertyGroup.Version
+              Write-Output "current=$currentVersion" >> $env:GITHUB_OUTPUT
+              Write-Host "Current version: $currentVersion"
+
+         - name: Calculate new version
+           id: new_version
+           shell: pwsh
+           run: |
+              $current = "${{ steps.current_version.outputs.current }}"
+              $versionType = "${{ github.event.inputs.version_type }}"
+
+              if ($versionType -eq "none") {
+                $newVersion = $current
+              } else {
+                $parts = $current.Split('.')
+                $major = [int]$parts[0]
+                $minor = [int]$parts[1]  
+                $patch = [int]$parts[2]
+                
+                switch ($versionType) {
+                  "major" {
+                    $major++
+                    $minor = 0
+                    $patch = 0
+                  }
+                  "minor" {
+                    $minor++
+                    $patch = 0
+                  }
+                  "patch" {
+                    $patch++
+                  }
+                }
+                
+                $newVersion = "$major.$minor.$patch"
+              }
+
+              Write-Output "version=$newVersion" >> $env:GITHUB_OUTPUT
+              Write-Host "New version: $newVersion"
+
+         - name: Update version in csproj
+           if: github.event.inputs.version_type != 'none'
+           shell: pwsh
+           run: |
+              $newVersion = "${{ steps.new_version.outputs.version }}"
+              [xml]$csproj = Get-Content "Mutelith.csproj"
+              $csproj.Project.PropertyGroup.Version = $newVersion
+              $csproj.Project.PropertyGroup.FileVersion = $newVersion
+              $csproj.Project.PropertyGroup.AssemblyVersion = $newVersion + ".0"
+              $csproj.Save("Mutelith.csproj")
+              (Get-Content "Mutelith.csproj") -replace '^ {3}', "`t" | Set-Content "Mutelith.csproj"
+              Write-Host "Updated version to: $newVersion"
+
+         - name: Restore dependencies
+           run: dotnet restore
+
+         - name: Build application
+           run: dotnet build --configuration Release --no-restore
+
+         - name: Publish Windows x64
+           run: |
+              dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:PublishTrimmed=false -o ./publish/win-x64
+
+         - name: Publish Windows x64 Self-Contained
+           run: |
+              dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o ./publish/win-x64-sc
+
+         - name: Rename executables
+           shell: pwsh
+           run: |
+              # Self-contained (standalone)
+
+              Move-Item "./publish/win-x64-sc/Mutelith.exe" "./publish/Mutelith.exe"
+
+              # native (framework-dependent)
+              Move-Item "./publish/win-x64/Mutelith.exe" "./publish/Mutelith-native.exe"
+
+              # Set outputs for release
+              Write-Output "fd_exe=Mutelith-native.exe" >> $env:GITHUB_OUTPUT
+              Write-Output "sc_exe=Mutelith.exe" >> $env:GITHUB_OUTPUT
+           id: rename_exe
+
+         - name: Commit version changes
+           if: github.event.inputs.version_type != 'none'
+           shell: pwsh
+           run: |
+              git config --local user.email "action@github.com"
+              git config --local user.name "GitHub Action"
+              git add Mutelith.csproj
+              git commit -m "Bump version to ${{ steps.new_version.outputs.version }}" || exit 0
+              git push
+
+         - name: Generate changelog
+           if: github.event.inputs.version_type != 'none'
+           id: changelog
+           shell: bash
+           run: |
+              PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+              if [ -z "$PREVIOUS_TAG" ]; then
+                ALL_COMMITS=$(git log --pretty=format:"* %s by @%an (%h)" --no-merges | grep -v "^* Release v")
+                echo "previous_tag=" >> $GITHUB_OUTPUT
+              else
+                ALL_COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"* %s by @%an (%h)" --no-merges | grep -v "^* Release v")
+                echo "previous_tag=${PREVIOUS_TAG}" >> $GITHUB_OUTPUT
+              fi
+
+              ADD_COMMITS=$(echo "$ALL_COMMITS" | grep "^* Add " || true)
+              UPDATE_COMMITS=$(echo "$ALL_COMMITS" | grep "^* Update " || true)
+              FIX_COMMITS=$(echo "$ALL_COMMITS" | grep "^* Fix " || true)
+              OTHER_COMMITS=$(echo "$ALL_COMMITS" | grep -v "^* Add " | grep -v "^* Update " | grep -v "^* Fix " || true)
+
+              CHANGELOG=""
+              [ -n "$ADD_COMMITS" ] && CHANGELOG="$ADD_COMMITS"
+              [ -n "$UPDATE_COMMITS" ] && CHANGELOG="$CHANGELOG"$'\n'"$UPDATE_COMMITS"
+              [ -n "$FIX_COMMITS" ] && CHANGELOG="$CHANGELOG"$'\n'"$FIX_COMMITS"
+              [ -n "$OTHER_COMMITS" ] && CHANGELOG="$CHANGELOG"$'\n'"$OTHER_COMMITS"
+
+              CHANGELOG=$(echo "$CHANGELOG" | sed '/^$/d')
+
+              echo "changelog<<EOF" >> $GITHUB_OUTPUT
+              echo "$CHANGELOG" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+
+         - name: Create GitHub Release
+           if: github.event.inputs.version_type != 'none'
+           uses: softprops/action-gh-release@v2
+           with:
+              tag_name: v${{ steps.new_version.outputs.version }}
+              name: v${{ steps.new_version.outputs.version }}
+              body: |
+                 ## ✨ What's Changed
+                 ${{ steps.changelog.outputs.changelog }}  
+
+                 ${{ steps.changelog.outputs.previous_tag && format('**Full Changelog**: https://github.com/{0}/compare/{1}...v{2}', github.repository, steps.changelog.outputs.previous_tag, steps.new_version.outputs.version) || '' }}
+              draft: false
+              prerelease: false
+              files: |
+                 ./publish/Mutelith.exe
+                 ./publish/Mutelith-native.exe
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+         - name: Upload Build Artifacts
+           uses: actions/upload-artifact@v4
+           with:
+              name: executables-v${{ steps.new_version.outputs.version }}
+              path: |
+                 ./publish/*.exe
+              retention-days: 30
