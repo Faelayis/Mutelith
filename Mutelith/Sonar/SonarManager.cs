@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace Mutelith {
 	public class SonarManager {
 		private readonly MMDeviceEnumerator _enumerator;
-		private readonly string _configPath = "sonar_config.json";
+		private readonly string _configPath;
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
 		private MMDevice _sonarMicDevice;
 		private DateTime _lastDeviceCacheTime;
@@ -17,6 +17,15 @@ namespace Mutelith {
 			_enumerator = new MMDeviceEnumerator();
 			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
 			_lastDeviceCacheTime = DateTime.MinValue;
+
+			var appDataPath = Path.Combine(
+				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+				"Mutelith"
+			);
+			if (!Directory.Exists(appDataPath)) {
+				Directory.CreateDirectory(appDataPath);
+			}
+			_configPath = Path.Combine(appDataPath, "sonar_config.json");
 		}
 
 		public void InitializeAndSaveConfigs() {
