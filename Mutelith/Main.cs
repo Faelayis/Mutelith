@@ -66,12 +66,6 @@ class Program {
 
 		trayIcon.ContextMenuStrip = contextMenu;
 
-		if (!isSilent) {
-			trayIcon.BalloonTipTitle = "Mutelith";
-			trayIcon.BalloonTipText = devMode ? "Running in DEV mode" : "Running in background";
-			trayIcon.ShowBalloonTip(2000);
-		}
-
 		_ = Task.Run(async () => await RunMonitoringLoop(args, statusItem));
 		Application.Run();
 	}
@@ -85,7 +79,6 @@ class Program {
 		if (!string.IsNullOrEmpty(processName)) {
 			return processName;
 		}
-
 
 		return Path.Combine(AppContext.BaseDirectory, "mutelith.exe");
 	}
@@ -118,19 +111,6 @@ class Program {
 					LogToFile("Added to startup registry with --silent");
 				}
 			}
-
-			var tempIcon = new NotifyIcon() {
-				Icon = SystemIcons.Application,
-				Visible = true,
-				BalloonTipTitle = "Mutelith Installed",
-				BalloonTipText = "Application installed successfully. Restarting...",
-				BalloonTipIcon = ToolTipIcon.Info
-			};
-			tempIcon.ShowBalloonTip(2000);
-
-			Thread.Sleep(2500);
-			tempIcon.Visible = false;
-			tempIcon.Dispose();
 
 			System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
 				FileName = INSTALL_PATH,
@@ -240,15 +220,6 @@ class Program {
 		}
 	}
 
-	static void ShowNotification(string title, string message, ToolTipIcon icon) {
-		if (trayIcon != null) {
-			trayIcon.BalloonTipTitle = title;
-			trayIcon.BalloonTipText = message;
-			trayIcon.BalloonTipIcon = icon;
-			trayIcon.ShowBalloonTip(3000);
-		}
-	}
-
 	static void LogToFile(string message) {
 		try {
 			string logPath = Path.Combine(INSTALL_FOLDER, "logs.txt");
@@ -265,7 +236,7 @@ class Program {
 				System.Diagnostics.Process.Start("explorer.exe", INSTALL_FOLDER);
 			}
 		} catch (Exception ex) {
-			ShowNotification("Error", $"Cannot open logs: {ex.Message}", ToolTipIcon.Error);
+			LogToFile($"Error opening logs folder: {ex.Message}");
 		}
 	}
 }
