@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
 
 class Program {
 	private static NotifyIcon trayIcon;
@@ -166,12 +167,24 @@ class Program {
 			audioManager = new SonarManager();
 			bool wasDiscordRunning = false;
 			bool hasInitialized = false;
+			bool wasFullscreen = false;
 
 			UpdateStatus(statusItem, "Monitoring Discord...");
 
 			while (isRunning) {
 				try {
 					bool isDiscordRunning = DiscordDetector.IsRunning();
+					bool isFullscreen = FullscreenDetector.IsFullscreenAppActive();
+
+					if (isFullscreen) {
+						wasFullscreen = true;
+						Thread.Sleep(2000);
+						continue;
+					}
+
+					if (wasFullscreen && !isFullscreen) {
+						wasFullscreen = false;
+					}
 
 					if (isDiscordRunning != wasDiscordRunning) {
 						if (isDiscordRunning) {
@@ -206,6 +219,56 @@ class Program {
 			}
 		} catch (Exception ex) {
 			LogToFile($"Fatal error: {ex.Message}");
+		}
+	}
+
+	static class FullscreenDetector {
+		[StructLayout(LayoutKind.Sequential)]
+		private struct RECT {
+			public int Left;
+			public int Top;
+			public int Right;
+			public int Bottom;
+		}
+
+		[DllImport("user32.dll")]
+		private static extern IntPtr GetForegroundWindow();
+
+		[DllImport("user32.dll")]
+		private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+		[DllImport("user32.dll")]
+		private static extern bool IsWindowVisible(IntPtr hWnd);
+		public static bool IsFullscreenAppActive() {
+			try {
+				IntPtr hWnd = GetForegroundWindow();
+				if (hWnd == IntPtr.Zero) {
+					return false;
+				}
+
+				if (!IsWindowVisible(hWnd)) {
+					return false;
+				}
+
+				if (!GetWindowRect(hWnd, out RECT rect)) {
+					return false;
+				}
+
+				var screen = Screen.FromHandle(hWnd);
+				var bounds = screen.Bounds;
+
+				int width = rect.Right - rect.Left;
+				int height = rect.Bottom - rect.Top;
+
+				const int tolerance = 2;
+
+				bool matchWidth = Math.Abs(width - bounds.Width) <= tolerance;
+				bool matchHeight = Math.Abs(height - bounds.Height) <= tolerance;
+
+				return matchWidth && matchHeight;
+			} catch {
+				return false;
+			}
 		}
 	}
 
