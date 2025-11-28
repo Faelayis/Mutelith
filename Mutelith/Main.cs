@@ -11,6 +11,7 @@ class Program {
 	private static NotifyIcon trayIcon;
 	private static SonarManager audioManager;
 	private static bool isRunning = true;
+	private static bool isSilent = true;
 	private static readonly string INSTALL_FOLDER = Path.Combine(
 		Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 		"Mutelith"
@@ -21,7 +22,19 @@ class Program {
 
 	[STAThread]
 	private static void Main(string[] args) {
-		if (!IsInstalled()) {
+		bool devMode = Array.Exists(
+			args,
+			arg => string.Equals(arg, "--dev", StringComparison.OrdinalIgnoreCase)
+		);
+
+		bool silentMode = Array.Exists(
+			args,
+			arg => string.Equals(arg, "--silent", StringComparison.OrdinalIgnoreCase)
+		);
+
+		isSilent = silentMode;
+
+		if (!devMode && !IsInstalled()) {
 			if (InstallAndRestart()) {
 				return;
 			}
@@ -30,7 +43,9 @@ class Program {
 		trayIcon = new NotifyIcon() {
 			Icon = SystemIcons.Application,
 			Visible = true,
-			Text = "Mutelith - Monitoring Discord"
+			Text = devMode
+				? "Mutelith (DEV) - Monitoring Discord"
+				: "Mutelith - Monitoring Discord"
 		};
 
 		var contextMenu = new ContextMenuStrip();
@@ -50,9 +65,12 @@ class Program {
 		});
 
 		trayIcon.ContextMenuStrip = contextMenu;
-		trayIcon.BalloonTipTitle = "Mutelith";
-		trayIcon.BalloonTipText = "Running in background";
-		trayIcon.ShowBalloonTip(2000);
+
+		if (!isSilent) {
+			trayIcon.BalloonTipTitle = "Mutelith";
+			trayIcon.BalloonTipText = devMode ? "Running in DEV mode" : "Running in background";
+			trayIcon.ShowBalloonTip(2000);
+		}
 
 		_ = Task.Run(async () => await RunMonitoringLoop(args, statusItem));
 		Application.Run();
@@ -96,8 +114,8 @@ class Program {
 
 			using (RegistryKey key = Registry.CurrentUser.OpenSubKey(STARTUP_KEY, true)) {
 				if (key != null) {
-					key.SetValue(APP_NAME, $"\"{INSTALL_PATH}\"");
-					LogToFile("Added to startup registry");
+					key.SetValue(APP_NAME, $"\"{INSTALL_PATH}\" --silent");
+					LogToFile("Added to startup registry with --silent");
 				}
 			}
 
@@ -137,9 +155,13 @@ class Program {
 	static async Task RunMonitoringLoop(string[] args, ToolStripMenuItem statusItem) {
 		try {
 			var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+			bool devMode = Array.Exists(args, arg => arg == "--dev");
 
 			LogToFile($"Version: {version}");
 			LogToFile($"Running from: {GetCurrentExecutablePath()}");
+			if (devMode) {
+				LogToFile("DEV MODE: Install check skipped");
+			}
 			UpdateStatus(statusItem, "Initializing...");
 
 			string githubToken = null;

@@ -19,7 +19,7 @@
 			"label": "watch",
 			"command": "dotnet",
 			"type": "process",
-			"args": ["watch", "run", "--project", "${workspaceFolder}/Mutelith.csproj"],
+			"args": ["watch", "run", "--project", "${workspaceFolder}/Mutelith.csproj", "--", "--dev"],
 			"problemMatcher": "$msCompile"
 		}
 	]
