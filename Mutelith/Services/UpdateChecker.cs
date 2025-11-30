@@ -17,51 +17,37 @@ namespace Mutelith {
 		}
 		public UpdateChecker(string githubToken) {
 			var assembly = Assembly.GetExecutingAssembly();
-			var repoUrl = GetRepositoryUrl(assembly);
+			_currentVersion = assembly.GetName().Version;
 
-			if (string.IsNullOrEmpty(repoUrl)) {
-				_githubOwner = "faelayis";
-				_githubRepo = AppConstants.APP_NAME;
-			} else {
-				ParseRepositoryUrl(repoUrl, out _githubOwner, out _githubRepo);
+			if (string.IsNullOrWhiteSpace(AppConstants.GITHUB_REPOSITORY_URL)) {
+				Logger.Error("GITHUB_REPOSITORY_URL is not configured in AppConstants.");
+				throw new InvalidOperationException("GITHUB_REPOSITORY_URL is not configured.");
 			}
+
+			ParseRepositoryUrl(AppConstants.GITHUB_REPOSITORY_URL, out _githubOwner, out _githubRepo);
 
 			_client = new GitHubClient(new ProductHeaderValue(_githubRepo));
 
-			string tokenToUse = githubToken;
-
-			if (!string.IsNullOrEmpty(tokenToUse)) {
-				_client.Credentials = new Credentials(tokenToUse);
-			}
-
-			_currentVersion = assembly.GetName().Version;
-		}
-
-		private string GetRepositoryUrl(Assembly assembly) {
-			try {
-				var attributes = assembly.GetCustomAttributes<AssemblyMetadataAttribute>();
-				var repoUrlAttribute = attributes.FirstOrDefault(a => a.Key == "RepositoryUrl");
-				return repoUrlAttribute?.Value ?? "";
-			} catch {
-				return "";
+			if (!string.IsNullOrEmpty(githubToken)) {
+				_client.Credentials = new Credentials(githubToken);
 			}
 		}
 
 		private void ParseRepositoryUrl(string repositoryUrl, out string owner, out string repo) {
-			try {
-				var uri = new Uri(repositoryUrl);
-				var segments = uri.AbsolutePath.Trim('/').Split('/');
+			var uri = new Uri(repositoryUrl);
+			var segments = uri.AbsolutePath.Trim('/').Split('/');
 
-				if (segments.Length >= 2) {
-					owner = segments[0];
-					repo = segments[1];
-					return;
-				}
-			} catch {
+			if (segments.Length < 2) {
+				Logger.Error($"Invalid GitHub repository URL: {repositoryUrl}");
+				throw new InvalidOperationException($"Invalid GitHub repository URL: {repositoryUrl}");
 			}
 
-			owner = "faelayis";
-			repo = AppConstants.APP_NAME;
+			owner = segments[0];
+			repo = segments[1];
+
+			if (repo.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) {
+				repo = repo.Substring(0, repo.Length - 4);
+			}
 		}
 
 		public async Task<bool> CheckForUpdatesAsync() {
@@ -95,6 +81,7 @@ namespace Mutelith {
 					return true;
 				}
 
+				Logger.Info("No updates available");
 				return false;
 			} catch (Exception ex) {
 				Logger.Error($"Error checking for updates: {ex.Message}");
@@ -121,7 +108,7 @@ namespace Mutelith {
 					Logger.Warning("No Windows executable found in release assets");
 					Logger.Info("Looking for any .exe file...");
 					asset = release.Assets.FirstOrDefault(a =>
-					  a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+						a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
 				}
 
 				if (asset == null) {

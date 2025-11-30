@@ -13,17 +13,23 @@ class Program {
 
 	[STAThread]
 	private static void Main(string[] args) {
-		System.Diagnostics.Debug.WriteLine($"Args received: {string.Join(", ", args)}");
+		Debug.WriteLine($"Args received: {string.Join(", ", args)}");
 
 		bool devMode = Array.Exists(args, arg => arg == AppConstants.ARG_DEV_MODE);
 		bool silentMode = Array.Exists(args, arg => arg == AppConstants.ARG_SILENT_MODE);
 		bool logs = Array.Exists(args, arg => arg == AppConstants.ARG_LOGS);
+		bool uninstall = Array.Exists(args, arg => string.Equals(arg, AppConstants.ARG_UNINSTALL, StringComparison.OrdinalIgnoreCase));
 
 		Logger.Initialize(devMode, logs);
 		isSilent = silentMode;
 
-		System.Diagnostics.Debug.WriteLine($"Dev Mode: {devMode}, Silent Mode: {silentMode}");
-		ClosePreviousInstances();
+		Debug.WriteLine($"Dev Mode: {devMode}, Silent Mode: {silentMode}");
+		AppInstance.ClosePreviousInstances();
+
+		if (uninstall) {
+			AppUninstaller.UninstallAndRemoveFile();
+			return;
+		}
 
 		if (!devMode && !AppInstaller.IsInstalled()) {
 			if (AppInstaller.InstallAndRestart()) {
@@ -39,29 +45,6 @@ class Program {
 
 		_ = Task.Run(async () => await RunMonitoringLoop(args));
 		Application.Run();
-	}
-
-	private static void ClosePreviousInstances() {
-		try {
-			var current = Process.GetCurrentProcess();
-			var processes = Process.GetProcessesByName(current.ProcessName);
-
-			foreach (var p in processes) {
-				if (p.Id == current.Id) {
-					continue;
-				}
-
-				try {
-					Logger.Info($"Found previous Mutelith instance (PID {p.Id}), killing it...");
-					p.Kill();
-					p.WaitForExit(5000);
-				} catch (Exception ex) {
-					Logger.Error($"Failed to kill previous instance {p.Id}: {ex.Message}");
-				}
-			}
-		} catch (Exception ex) {
-			Logger.Error($"Error while checking for previous instances: {ex.Message}");
-		}
 	}
 
 	private static void OnExit() {
