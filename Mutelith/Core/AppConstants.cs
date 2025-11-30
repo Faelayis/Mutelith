@@ -8,7 +8,7 @@ namespace Mutelith {
 			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 			APP_NAME
 		);
-		public static readonly string INSTALL_PATH = Path.Combine(INSTALL_FOLDER, "mutelith.exe");
+		public static readonly string INSTALL_PATH = Path.Combine(INSTALL_FOLDER, "Mutelith.exe");
 		public static readonly string LOG_PATH = Path.Combine(INSTALL_FOLDER, "logs.txt");
 		public const string STARTUP_REGISTRY_KEY = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
 		public const int MONITORING_INTERVAL_MS = 2000;

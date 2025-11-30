@@ -15,7 +15,7 @@ namespace Mutelith {
 				return processName;
 			}
 
-			return Path.Combine(AppContext.BaseDirectory, "mutelith.exe");
+			return Path.Combine(AppContext.BaseDirectory, "Mutelith.exe");
 		}
 
 		public static bool IsInstalled() {
