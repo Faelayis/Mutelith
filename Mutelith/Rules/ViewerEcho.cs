@@ -5,47 +5,50 @@ using System.IO;
 using System.Text.Json;
 
 namespace Mutelith {
-	public class SonarManager : IAudioManager {
+	public abstract class ViewerEcho : IAudioManager {
 		private readonly AudioDeviceEnumerator _enumerator;
 		private readonly string _configPath;
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
-		public SonarManager() {
+		protected abstract string TargetDeviceName { get; }
+		protected abstract string DevicePrefix { get; }
+		protected abstract string ConfigFileName { get; }
+		protected ViewerEcho() {
 			_enumerator = new AudioDeviceEnumerator();
 			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
 
 			if (!Directory.Exists(AppConstants.INSTALL_FOLDER)) {
 				Directory.CreateDirectory(AppConstants.INSTALL_FOLDER);
 			}
-			_configPath = AppConstants.CONFIG_PATH;
+			_configPath = Path.Combine(AppConstants.INSTALL_FOLDER, ConfigFileName);
 		}
 
 		public void InitializeAndSaveConfigs() {
-			bool sonarMicFound = CheckSonarMicrophoneExists();
+			bool deviceFound = CheckTargetDeviceExists();
 
-			if (!sonarMicFound) {
-				Logger.Warning("SteelSeries Sonar - Microphone not found - restoring default settings");
+			if (!deviceFound) {
+				Logger.Warning($"{TargetDeviceName} not found - restoring default settings");
 				RestoreDefaultConfigs();
 				return;
 			}
 
 			SaveDefaultConfigs();
-			FindAndConfigureSonarMicrophone();
+			FindAndConfigureTargetDevice();
 		}
 
 		public void ApplyMuteSettings() {
-			bool sonarMicFound = CheckSonarMicrophoneExists();
+			bool deviceFound = CheckTargetDeviceExists();
 
-			if (!sonarMicFound) {
-				Logger.Warning("SteelSeries Sonar - Microphone not found");
+			if (!deviceFound) {
+				Logger.Warning($"{TargetDeviceName} not found");
 				return;
 			}
 
-			FindAndConfigureSonarMicrophone();
+			FindAndConfigureTargetDevice();
 		}
 
-		private AudioDevice GetSonarMicrophoneDevice() {
+		private AudioDevice GetTargetDevice() {
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_MICROPHONE, StringComparison.OrdinalIgnoreCase)) {
+				if (device.FriendlyName.Contains(TargetDeviceName, StringComparison.OrdinalIgnoreCase)) {
 					return device;
 				} else {
 					device.Dispose();
@@ -55,8 +58,8 @@ namespace Mutelith {
 			return null;
 		}
 
-		private bool CheckSonarMicrophoneExists() {
-			var device = GetSonarMicrophoneDevice();
+		private bool CheckTargetDeviceExists() {
+			var device = GetTargetDevice();
 			if (device != null) {
 				device.Dispose();
 				return true;
@@ -116,17 +119,17 @@ namespace Mutelith {
 			}
 		}
 
-		private bool FindAndConfigureSonarMicrophone() {
+		private bool FindAndConfigureTargetDevice() {
 			int discordMutedCount = 0;
-			var sonarMic = GetSonarMicrophoneDevice();
+			var targetDevice = GetTargetDevice();
 
-			if (sonarMic != null) {
-				discordMutedCount += MuteDiscordInDevice(sonarMic);
-				sonarMic.Dispose();
+			if (targetDevice != null) {
+				discordMutedCount += MuteDiscordInDevice(targetDevice);
+				targetDevice.Dispose();
 			}
 
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_PREFIX, StringComparison.OrdinalIgnoreCase)) {
+				if (device.FriendlyName.Contains(DevicePrefix, StringComparison.OrdinalIgnoreCase)) {
 					device.Dispose();
 					continue;
 				}
