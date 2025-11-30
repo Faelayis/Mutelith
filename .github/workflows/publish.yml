@@ -133,7 +133,7 @@ jobs:
               git config --local user.email "action@github.com"
               git config --local user.name "GitHub Action"
               git add Mutelith.csproj
-              git commit -m "Bump version to ${{ steps.new_version.outputs.version }}" || exit 0
+              git commit -m "Release v${{ steps.new_version.outputs.version }}" || exit 0
               git push
 
          - name: Generate changelog
