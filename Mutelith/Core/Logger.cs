@@ -24,10 +24,10 @@ namespace Mutelith {
 		}
 
 		public static void Error(string message) {
-			LogMessage(message);
+			LogMessage(message, forceFile: true);
 		}
 
-		private static void LogMessage(string message) {
+		private static void LogMessage(string message, bool forceFile = false) {
 			try {
 				string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}";
 
@@ -36,8 +36,11 @@ namespace Mutelith {
 					System.Diagnostics.Debug.WriteLine(logEntry);
 				}
 
-				if (_logs) {
-					Directory.CreateDirectory(Path.GetDirectoryName(AppConstants.LOG_PATH));
+				if (_logs || forceFile) {
+					var dir = Path.GetDirectoryName(AppConstants.LOG_PATH);
+					if (!string.IsNullOrEmpty(dir)) {
+						Directory.CreateDirectory(dir);
+					}
 					File.AppendAllText(AppConstants.LOG_PATH, logEntry + Environment.NewLine);
 				}
 			} catch {

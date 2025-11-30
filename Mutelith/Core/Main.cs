@@ -1,5 +1,6 @@
 using Mutelith;
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -22,6 +23,7 @@ class Program {
 		isSilent = silentMode;
 
 		System.Diagnostics.Debug.WriteLine($"Dev Mode: {devMode}, Silent Mode: {silentMode}");
+		ClosePreviousInstances();
 
 		if (!devMode && !AppInstaller.IsInstalled()) {
 			if (AppInstaller.InstallAndRestart()) {
@@ -39,13 +41,35 @@ class Program {
 		Application.Run();
 	}
 
+	private static void ClosePreviousInstances() {
+		try {
+			var current = Process.GetCurrentProcess();
+			var processes = Process.GetProcessesByName(current.ProcessName);
+
+			foreach (var p in processes) {
+				if (p.Id == current.Id) {
+					continue;
+				}
+
+				try {
+					Logger.Info($"Found previous Mutelith instance (PID {p.Id}), killing it...");
+					p.Kill();
+					p.WaitForExit(5000);
+				} catch (Exception ex) {
+					Logger.Error($"Failed to kill previous instance {p.Id}: {ex.Message}");
+				}
+			}
+		} catch (Exception ex) {
+			Logger.Error($"Error while checking for previous instances: {ex.Message}");
+		}
+	}
+
 	private static void OnExit() {
 		isRunning = false;
 		trayIcon.Visible = false;
 		Application.Exit();
 		Environment.Exit(0);
 	}
-
 
 	static async Task RunMonitoringLoop(string[] args) {
 		try {

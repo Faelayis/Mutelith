@@ -36,8 +36,8 @@ namespace Mutelith {
 
 				using (RegistryKey key = Registry.CurrentUser.OpenSubKey(AppConstants.STARTUP_REGISTRY_KEY, true)) {
 					if (key != null) {
-						key.SetValue(AppConstants.APP_NAME, $"\"{AppConstants.INSTALL_PATH}\" {AppConstants.ARG_SILENT_MODE} {AppConstants.ARG_STARTUP} {AppConstants.ARG_LOGS}");
-						Logger.Info($"Added to startup registry with {AppConstants.ARG_SILENT_MODE} {AppConstants.ARG_STARTUP} {AppConstants.ARG_LOGS}");
+						key.SetValue(AppConstants.APP_NAME, $"\"{AppConstants.INSTALL_PATH}\" {AppConstants.ARG_SILENT_MODE} {AppConstants.ARG_STARTUP}");
+						Logger.Info($"Added to startup registry with {AppConstants.ARG_SILENT_MODE} {AppConstants.ARG_STARTUP}");
 					}
 				}
 
