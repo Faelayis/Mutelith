@@ -13,10 +13,10 @@ Mutelith automatically mutes Discord on the “wrong” devices, keeps it on the
 
 ## Supported audio stacks 🎛️
 
-| Providers                                             | Rule Support | Status  | Notes |
-| ----------------------------------------------------- | ------------ | ------- | ----- |
-| [SteelSeries Sonar](https://steelseries.com/gg/sonar) | `ViewerEcho` | ✅ Live | -     |
-| [FxSound](https://www.fxsound.com/)                   | `ViewerEcho` | ✅ Live | -     |
+| Providers                                             | Rule Support                                               | Status  | Notes |
+| ----------------------------------------------------- | ---------------------------------------------------------- | ------- | ----- |
+| [SteelSeries Sonar](https://steelseries.com/gg/sonar) | [`ViewerEcho`](./Mutelith/Rules/README.md#rule-viewerecho) | ✅ Live | -     |
+| [FxSound](https://www.fxsound.com/)                   | [`ViewerEcho`](./Mutelith/Rules/README.md#rule-viewerecho) | ✅ Live | -     |
 
 <!-- prettier-ignore -->
 > [!WARNING]
