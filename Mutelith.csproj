@@ -1,3 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<OutputType Condition="'$(Configuration)' == 'Debug'">Exe</OutputType>
@@ -7,9 +8,9 @@
 		<EnableComHosting>true</EnableComHosting>
 		<SelfContained>false</SelfContained>
 		<UseWindowsForms>true</UseWindowsForms>
-		<Version>0.0.1</Version>
-		<FileVersion>0.0.1</FileVersion>
-		<AssemblyVersion>0.0.1.0</AssemblyVersion>
+		<Version>0.1.0</Version>
+		<FileVersion>0.1.0</FileVersion>
+		<AssemblyVersion>0.1.0.0</AssemblyVersion>
 		<Authors>Faelayis</Authors>
 		<Company>Faelayis</Company>
 		<Title>Mutelith</Title>
@@ -21,10 +22,8 @@
 		<PackageProjectUrl>https://github.com/Faelayis/Mutelith</PackageProjectUrl>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageTags>discord;audio;echo;fix;steelseries;sonar;fxsound</PackageTags>
-		<ApplicationIcon>
-		</ApplicationIcon>
-		<Win32Resource>
-		</Win32Resource>
+		<ApplicationIcon></ApplicationIcon>
+		<Win32Resource></Win32Resource>
 		<NeutralLanguage>en</NeutralLanguage>
 	</PropertyGroup>
 	<ItemGroup>
