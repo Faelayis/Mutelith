@@ -18,7 +18,7 @@ namespace Mutelith {
 		public const string ARG_SILENT_MODE = "--silent";
 		public const string ARG_STARTUP = "--startup";
 		public const string ARG_GH_TOKEN = "--ghtoken";
-		public const string ARG_NO_LOGS = "--nologs";
+		public const string ARG_LOGS = "--logs";
 		public const string GITHUB_REPOSITORY_URL = "https://github.com/Faelayis/Mutelith";
 	}
 }

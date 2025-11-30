@@ -4,11 +4,11 @@ using System.IO;
 namespace Mutelith {
 	public static class Logger {
 		private static bool _devMode = false;
-		private static bool _noLogs = false;
+		private static bool _logs = false;
 
-		public static void Initialize(bool devMode = false, bool noLogs = false) {
+		public static void Initialize(bool devMode = false, bool logs = false) {
 			_devMode = devMode;
-			_noLogs = noLogs;
+			_logs = logs;
 		}
 
 		public static void Info(string message) {
@@ -28,8 +28,6 @@ namespace Mutelith {
 		}
 
 		private static void LogMessage(string message) {
-			if (_noLogs) return;
-
 			try {
 				string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}";
 
@@ -38,8 +36,10 @@ namespace Mutelith {
 					System.Diagnostics.Debug.WriteLine(logEntry);
 				}
 
-				Directory.CreateDirectory(Path.GetDirectoryName(AppConstants.LOG_PATH));
-				File.AppendAllText(AppConstants.LOG_PATH, logEntry + Environment.NewLine);
+				if (_logs) {
+					Directory.CreateDirectory(Path.GetDirectoryName(AppConstants.LOG_PATH));
+					File.AppendAllText(AppConstants.LOG_PATH, logEntry + Environment.NewLine);
+				}
 			} catch {
 			}
 		}
