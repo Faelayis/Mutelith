@@ -101,6 +101,12 @@ namespace Mutelith {
 					key.SetValue("NoModify", 1, RegistryValueKind.DWord);
 					key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
 
+					string helpLink = $"{AppConstants.GITHUB_REPOSITORY_URL}/issues";
+					key.SetValue("HelpLink", helpLink);
+
+					string supportLink = AppConstants.GITHUB_REPOSITORY_URL;
+					key.SetValue("URLInfoAbout", supportLink);
+
 					long sizeBytes = AppInfo.GetDirectorySize(AppConstants.INSTALL_FOLDER);
 					int sizeKb = (int)Math.Max(1, sizeBytes / 1024);
 					key.SetValue("EstimatedSize", sizeKb, RegistryValueKind.DWord);
