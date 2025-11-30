@@ -43,8 +43,7 @@ You’ll usually see **two builds** in the releases:
 
 - Classic **framework-dependent** .NET build
 - Smaller file size
-- Requires the **.NET 8 Desktop Runtime** to be installed on Windows
-- ✅ **Recommended for most users** (especially if you already have other .NET apps installed)
+- Requires the [**.NET 8 SDK or Desktop Runtime**](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) to be installed on Windows
 
 ## Contributing 🤝
 
