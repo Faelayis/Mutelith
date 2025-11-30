@@ -84,8 +84,17 @@ jobs:
               $csproj.Project.PropertyGroup.Version = $newVersion
               $csproj.Project.PropertyGroup.FileVersion = $newVersion
               $csproj.Project.PropertyGroup.AssemblyVersion = $newVersion + ".0"
-              $csproj.Save("Mutelith.csproj")
-              (Get-Content "Mutelith.csproj") -replace '^ {3}', "`t" | Set-Content "Mutelith.csproj"
+
+              $settings = New-Object System.Xml.XmlWriterSettings
+              $settings.Indent = $true
+              $settings.IndentChars = "`t"
+              $settings.NewLineChars = "`n"
+              $settings.Encoding = [System.Text.Encoding]::UTF8
+
+              $writer = [System.Xml.XmlWriter]::Create("Mutelith.csproj", $settings)
+              $csproj.WriteTo($writer)
+              $writer.Flush()
+              $writer.Dispose()
               Write-Host "Updated version to: $newVersion"
 
          - name: Restore dependencies

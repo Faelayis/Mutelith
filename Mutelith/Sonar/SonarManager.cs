@@ -11,21 +11,16 @@ namespace Mutelith {
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
 		private MMDevice _sonarMicDevice;
 		private DateTime _lastDeviceCacheTime;
-		private readonly TimeSpan _cacheExpiration = TimeSpan.FromSeconds(30);
-
+		private readonly TimeSpan _cacheExpiration = TimeSpan.FromSeconds(AppConstants.DEVICE_CACHE_EXPIRATION_SECONDS);
 		public SonarManager() {
 			_enumerator = new MMDeviceEnumerator();
 			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
 			_lastDeviceCacheTime = DateTime.MinValue;
 
-			var appDataPath = Path.Combine(
-				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-				"Mutelith"
-			);
-			if (!Directory.Exists(appDataPath)) {
-				Directory.CreateDirectory(appDataPath);
+			if (!Directory.Exists(AppConstants.INSTALL_FOLDER)) {
+				Directory.CreateDirectory(AppConstants.INSTALL_FOLDER);
 			}
-			_configPath = Path.Combine(appDataPath, "sonar_config.json");
+			_configPath = AppConstants.CONFIG_PATH;
 		}
 
 		public void InitializeAndSaveConfigs() {
@@ -38,7 +33,7 @@ namespace Mutelith {
 			}
 
 			SaveDefaultConfigs();
-			MuteDiscordInDevices();
+			FindAndConfigureSonarMicrophone();
 		}
 
 		public void ApplyMuteSettings() {
@@ -49,7 +44,7 @@ namespace Mutelith {
 				return;
 			}
 
-			MuteDiscordInDevices();
+			FindAndConfigureSonarMicrophone();
 		}
 
 		private MMDevice GetSonarMicrophoneDevice(bool forceRefresh = false) {
@@ -67,7 +62,7 @@ namespace Mutelith {
 
 			_sonarMicDevice = null;
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				if (device.FriendlyName.Contains("SteelSeries Sonar - Microphone", StringComparison.OrdinalIgnoreCase)) {
+				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_MICROPHONE, StringComparison.OrdinalIgnoreCase)) {
 					_sonarMicDevice = device;
 					_lastDeviceCacheTime = DateTime.Now;
 					Logger.Info($"Found and cached device: {device.FriendlyName}");
@@ -82,33 +77,41 @@ namespace Mutelith {
 			return GetSonarMicrophoneDevice() != null;
 		}
 
-		private void SaveDefaultConfigs() {
-			Logger.Info("Saving default audio configurations...");
-			_savedConfigs.Clear();
-
+		private void ForEachAudioSession(Action<MMDevice, AudioSessionManager, AudioSessionControl, uint> action) {
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				var sessions = device.AudioSessionManager.Sessions;
+				var sessionManager = device.AudioSessionManager;
+				var sessions = sessionManager.Sessions;
+
 				for (int i = 0; i < sessions.Count; i++) {
 					var session = sessions[i];
 					var processId = session.GetProcessID;
 
 					try {
-						var process = System.Diagnostics.Process.GetProcessById((int)processId);
-						string key = $"{device.FriendlyName}_{process.ProcessName}_{processId}";
-
-						var config = new AudioSessionConfig {
-							DeviceName = device.FriendlyName,
-							ProcessName = process.ProcessName,
-							ProcessId = processId,
-							Volume = session.SimpleAudioVolume.Volume,
-							IsMuted = session.SimpleAudioVolume.Mute
-						};
-
-						_savedConfigs[key] = config;
+						action(device, sessionManager, session, processId);
 					} catch {
 					}
 				}
 			}
+		}
+
+		private void SaveDefaultConfigs() {
+			Logger.Info("Saving default audio configurations...");
+			_savedConfigs.Clear();
+
+			ForEachAudioSession((device, sessionManager, session, processId) => {
+				var process = System.Diagnostics.Process.GetProcessById((int)processId);
+				string key = $"{device.FriendlyName}_{process.ProcessName}_{processId}";
+
+				var config = new AudioSessionConfig {
+					DeviceName = device.FriendlyName,
+					ProcessName = process.ProcessName,
+					ProcessId = processId,
+					Volume = session.SimpleAudioVolume.Volume,
+					IsMuted = session.SimpleAudioVolume.Mute
+				};
+
+				_savedConfigs[key] = config;
+			});
 
 			try {
 				string json = JsonSerializer.Serialize(_savedConfigs, new JsonSerializerOptions { WriteIndented = true });
@@ -128,7 +131,7 @@ namespace Mutelith {
 			}
 
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				if (device.FriendlyName.Contains("SteelSeries Sonar", StringComparison.OrdinalIgnoreCase)) {
+				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_PREFIX, StringComparison.OrdinalIgnoreCase)) {
 					continue;
 				}
 
@@ -137,8 +140,7 @@ namespace Mutelith {
 
 			if (discordMutedCount > 0) {
 				Logger.Info($"Total Discord sessions muted: {discordMutedCount}");
-			}
-			else {
+			} else {
 				Logger.Warning("Discord audio session not found in any device");
 			}
 
@@ -156,21 +158,19 @@ namespace Mutelith {
 				try {
 					var process = System.Diagnostics.Process.GetProcessById((int)processId);
 
-					if (process.ProcessName.Equals("Discord", StringComparison.OrdinalIgnoreCase)) {
+					if (process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD, StringComparison.OrdinalIgnoreCase) ||
+						process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_PTB, StringComparison.OrdinalIgnoreCase) ||
+						process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_DEV, StringComparison.OrdinalIgnoreCase)) {
 						session.SimpleAudioVolume.Volume = 0f;
 						session.SimpleAudioVolume.Mute = true;
 						mutedCount++;
-						Logger.Success($"Discord muted in {device.FriendlyName}");
+						Logger.Success($"{process.ProcessName} muted in {device.FriendlyName}");
 					}
 				} catch {
 				}
 			}
 
 			return mutedCount;
-		}
-
-		private void MuteDiscordInDevices() {
-			FindAndConfigureSonarMicrophone();
 		}
 
 		private void RestoreDefaultConfigs() {
@@ -195,47 +195,18 @@ namespace Mutelith {
 			Logger.Info("Restoring default audio configurations...");
 			int restoredCount = 0;
 
-			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				var sessions = device.AudioSessionManager.Sessions;
-				for (int i = 0; i < sessions.Count; i++) {
-					var session = sessions[i];
-					var processId = session.GetProcessID;
+			ForEachAudioSession((device, sessionManager, session, processId) => {
+				var process = System.Diagnostics.Process.GetProcessById((int)processId);
+				string key = $"{device.FriendlyName}_{process.ProcessName}_{processId}";
 
-					try {
-						var process = System.Diagnostics.Process.GetProcessById((int)processId);
-						string key = $"{device.FriendlyName}_{process.ProcessName}_{processId}";
-
-						if (_savedConfigs.TryGetValue(key, out var config)) {
-							session.SimpleAudioVolume.Volume = config.Volume;
-							session.SimpleAudioVolume.Mute = config.IsMuted;
-							restoredCount++;
-						}
-					} catch {
-					}
+				if (_savedConfigs.TryGetValue(key, out var config)) {
+					session.SimpleAudioVolume.Volume = config.Volume;
+					session.SimpleAudioVolume.Mute = config.IsMuted;
+					restoredCount++;
 				}
-			}
+			});
 
 			Logger.Success($"Restored {restoredCount} audio session configurations");
-		}
-
-		public bool MuteDiscordInSonarMicrophone() {
-			var sonarMic = GetSonarMicrophoneDevice();
-
-			if (sonarMic == null) {
-				Logger.Warning("SteelSeries Sonar - Microphone device not found");
-				return false;
-			}
-
-			Logger.Info($"Found device: {sonarMic.FriendlyName}");
-			int mutedCount = MuteDiscordInDevice(sonarMic);
-
-			if (mutedCount == 0) {
-				Logger.Warning("Discord audio session not found in SteelSeries Sonar - Microphone");
-				return false;
-			}
-
-			Logger.Success("Discord audio in SteelSeries Sonar - Microphone has been muted");
-			return true;
 		}
 
 		public void ClearDeviceCache() {

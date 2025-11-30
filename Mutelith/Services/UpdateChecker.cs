@@ -20,10 +20,9 @@ namespace Mutelith {
 			var repoUrl = GetRepositoryUrl(assembly);
 
 			if (string.IsNullOrEmpty(repoUrl)) {
-				_githubOwner = "Faelayis";
-				_githubRepo = "Mutelith";
-			}
-			else {
+				_githubOwner = "faelayis";
+				_githubRepo = AppConstants.APP_NAME;
+			} else {
 				ParseRepositoryUrl(repoUrl, out _githubOwner, out _githubRepo);
 			}
 
@@ -61,8 +60,8 @@ namespace Mutelith {
 			} catch {
 			}
 
-			owner = "Faelayis";
-			repo = "Mutelith";
+			owner = "faelayis";
+			repo = AppConstants.APP_NAME;
 		}
 
 		public async Task<bool> CheckForUpdatesAsync() {
