@@ -25,7 +25,6 @@ You’ll usually see **two builds** in the releases:
 
 ### [`Mutelith.exe`](https://github.com/Faelayis/Mutelith/releases)
 
-- **Self-contained / native-style** build
 - Larger file size
 - Does **not** require any .NET runtime installed (good for “clean” or locked-down machines)
 - Useful if you want a **portable** EXE that “just runs” on most Windows 10/11 systems
