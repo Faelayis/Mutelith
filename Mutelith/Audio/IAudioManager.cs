@@ -4,6 +4,6 @@ namespace Mutelith {
 	public interface IAudioManager : IDisposable {
 		void InitializeAndSaveConfigs();
 		void ApplyMuteSettings();
-		void ClearDeviceCache();
+		void RestoreSettings();
 	}
 }

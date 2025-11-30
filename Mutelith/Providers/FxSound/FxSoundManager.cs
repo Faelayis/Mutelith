@@ -9,14 +9,10 @@ namespace Mutelith {
 		private readonly AudioDeviceEnumerator _enumerator;
 		private readonly string _configPath;
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
-		private AudioDevice _fxSoundSpeakersDevice;
-		private DateTime _lastDeviceCacheTime;
-		private readonly TimeSpan _cacheExpiration = TimeSpan.FromSeconds(AppConstants.DEVICE_CACHE_EXPIRATION_SECONDS);
 
 		public FxSoundManager() {
 			_enumerator = new AudioDeviceEnumerator();
 			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
-			_lastDeviceCacheTime = DateTime.MinValue;
 
 			if (!Directory.Exists(AppConstants.INSTALL_FOLDER)) {
 				Directory.CreateDirectory(AppConstants.INSTALL_FOLDER);
@@ -48,38 +44,25 @@ namespace Mutelith {
 			FindAndConfigureFxSoundSpeakers();
 		}
 
-		private AudioDevice GetFxSoundSpeakersDevice(bool forceRefresh = false) {
-			if (!forceRefresh &&
-				 _fxSoundSpeakersDevice != null &&
-				 DateTime.Now - _lastDeviceCacheTime < _cacheExpiration) {
-				try {
-					var state = _fxSoundSpeakersDevice.State;
-					if (state == DeviceState.Active) {
-						return _fxSoundSpeakersDevice;
-					}
-				} catch {
-				}
-			}
-
-			_fxSoundSpeakersDevice?.Dispose();
-			_fxSoundSpeakersDevice = null;
-
+		private AudioDevice GetFxSoundSpeakersDevice() {
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
 				if (device.FriendlyName.Contains(FxSoundConfig.DEVICE_FXSOUND_SPEAKERS, StringComparison.OrdinalIgnoreCase)) {
-					_fxSoundSpeakersDevice = device;
-					_lastDeviceCacheTime = DateTime.Now;
-					Logger.Info($"Found and cached device: {device.FriendlyName}");
-					break;
+					return device;
 				} else {
 					device.Dispose();
 				}
 			}
 
-			return _fxSoundSpeakersDevice;
+			return null;
 		}
 
 		private bool CheckFxSoundSpeakersExists() {
-			return GetFxSoundSpeakersDevice() != null;
+			var device = GetFxSoundSpeakersDevice();
+			if (device != null) {
+				device.Dispose();
+				return true;
+			}
+			return false;
 		}
 
 		private void ForEachAudioSession(Action<AudioDevice, AudioSession> action) {
@@ -140,6 +123,7 @@ namespace Mutelith {
 
 			if (fxSoundSpeakers != null) {
 				discordMutedCount += MuteDiscordInDevice(fxSoundSpeakers);
+				fxSoundSpeakers.Dispose();
 			}
 
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
@@ -236,14 +220,11 @@ namespace Mutelith {
 			Logger.Success($"Restored {restoredCount} audio session configurations");
 		}
 
-		public void ClearDeviceCache() {
-			_fxSoundSpeakersDevice?.Dispose();
-			_fxSoundSpeakersDevice = null;
-			_lastDeviceCacheTime = DateTime.MinValue;
+		public void RestoreSettings() {
+			RestoreDefaultConfigs();
 		}
 
 		public void Dispose() {
-			_fxSoundSpeakersDevice?.Dispose();
 			_enumerator?.Dispose();
 		}
 	}

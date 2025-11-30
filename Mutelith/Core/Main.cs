@@ -82,16 +82,42 @@ class Program {
 			}
 
 			audioManager = AudioManagerFactory.CreateManager();
+			AudioDeviceType currentDeviceType = AudioDeviceDetector.DetectDefaultDevice();
 			bool wasDiscordRunning = false;
 			bool hasInitialized = false;
 			bool wasFullscreen = false;
 
 			while (isRunning) {
 				try {
-					if (audioManager == null) {
+					AudioDeviceType detectedType = AudioDeviceDetector.DetectDefaultDevice();
+					int discordInstanceCount = DiscordDetector.GetInstanceCount();
+					bool isDiscordRunning = discordInstanceCount > 0;
+
+					if (detectedType != currentDeviceType) {
+						Logger.Info($"Default device changed from {currentDeviceType} to {detectedType}");
+						if (audioManager != null) {
+							audioManager.RestoreSettings();
+							audioManager.Dispose();
+							audioManager = null;
+						}
+						currentDeviceType = detectedType;
+						hasInitialized = false;
+
+						if (currentDeviceType != AudioDeviceType.None) {
+							audioManager = AudioManagerFactory.CreateManager();
+							if (audioManager != null) {
+								Logger.Info("Audio device manager initialized successfully");
+								if (isDiscordRunning) {
+									audioManager.InitializeAndSaveConfigs();
+									hasInitialized = true;
+								}
+							}
+						}
+					}
+
+					if (audioManager == null && currentDeviceType != AudioDeviceType.None) {
 						audioManager = AudioManagerFactory.CreateManager();
 						if (audioManager != null) {
-							hasInitialized = false;
 							Logger.Info("Audio device manager initialized successfully");
 						}
 					}
@@ -101,8 +127,6 @@ class Program {
 						continue;
 					}
 
-					int discordInstanceCount = DiscordDetector.GetInstanceCount();
-					bool isDiscordRunning = discordInstanceCount > 0;
 					bool isFullscreen = FullscreenDetector.IsFullscreenAppActive();
 
 					if (isFullscreen) {

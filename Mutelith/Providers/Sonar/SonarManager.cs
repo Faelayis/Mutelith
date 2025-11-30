@@ -9,13 +9,9 @@ namespace Mutelith {
 		private readonly AudioDeviceEnumerator _enumerator;
 		private readonly string _configPath;
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
-		private AudioDevice _sonarMicDevice;
-		private DateTime _lastDeviceCacheTime;
-		private readonly TimeSpan _cacheExpiration = TimeSpan.FromSeconds(AppConstants.DEVICE_CACHE_EXPIRATION_SECONDS);
 		public SonarManager() {
 			_enumerator = new AudioDeviceEnumerator();
 			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
-			_lastDeviceCacheTime = DateTime.MinValue;
 
 			if (!Directory.Exists(AppConstants.INSTALL_FOLDER)) {
 				Directory.CreateDirectory(AppConstants.INSTALL_FOLDER);
@@ -47,38 +43,25 @@ namespace Mutelith {
 			FindAndConfigureSonarMicrophone();
 		}
 
-		private AudioDevice GetSonarMicrophoneDevice(bool forceRefresh = false) {
-			if (!forceRefresh &&
-				 _sonarMicDevice != null &&
-				 DateTime.Now - _lastDeviceCacheTime < _cacheExpiration) {
-				try {
-					var state = _sonarMicDevice.State;
-					if (state == DeviceState.Active) {
-						return _sonarMicDevice;
-					}
-				} catch {
-				}
-			}
-
-			_sonarMicDevice?.Dispose();
-			_sonarMicDevice = null;
-
+		private AudioDevice GetSonarMicrophoneDevice() {
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
 				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_MICROPHONE, StringComparison.OrdinalIgnoreCase)) {
-					_sonarMicDevice = device;
-					_lastDeviceCacheTime = DateTime.Now;
-					Logger.Info($"Found and cached device: {device.FriendlyName}");
-					break;
+					return device;
 				} else {
 					device.Dispose();
 				}
 			}
 
-			return _sonarMicDevice;
+			return null;
 		}
 
 		private bool CheckSonarMicrophoneExists() {
-			return GetSonarMicrophoneDevice() != null;
+			var device = GetSonarMicrophoneDevice();
+			if (device != null) {
+				device.Dispose();
+				return true;
+			}
+			return false;
 		}
 
 		private void ForEachAudioSession(Action<AudioDevice, AudioSession> action) {
@@ -139,14 +122,17 @@ namespace Mutelith {
 
 			if (sonarMic != null) {
 				discordMutedCount += MuteDiscordInDevice(sonarMic);
+				sonarMic.Dispose();
 			}
 
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
 				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_PREFIX, StringComparison.OrdinalIgnoreCase)) {
+					device.Dispose();
 					continue;
 				}
 
 				discordMutedCount += MuteDiscordInDevice(device);
+				device.Dispose();
 			}
 
 			if (discordMutedCount > 0) {
@@ -233,14 +219,11 @@ namespace Mutelith {
 			Logger.Success($"Restored {restoredCount} audio session configurations");
 		}
 
-		public void ClearDeviceCache() {
-			_sonarMicDevice?.Dispose();
-			_sonarMicDevice = null;
-			_lastDeviceCacheTime = DateTime.MinValue;
+		public void RestoreSettings() {
+			RestoreDefaultConfigs();
 		}
 
 		public void Dispose() {
-			_sonarMicDevice?.Dispose();
 			_enumerator?.Dispose();
 		}
 	}
