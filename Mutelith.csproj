@@ -6,6 +6,7 @@
 		<PublishSingleFile>true</PublishSingleFile>
 		<EnableComHosting>true</EnableComHosting>
 		<SelfContained>false</SelfContained>
+		<UseWindowsForms>true</UseWindowsForms>
 		<Version>0.0.1</Version>
 		<FileVersion>0.0.1</FileVersion>
 		<AssemblyVersion>0.0.1.0</AssemblyVersion>
@@ -30,7 +31,6 @@
 		<AssemblyMetadata Include="RepositoryUrl" Value="$(RepositoryUrl)" />
 	</ItemGroup>
 	<ItemGroup>
-		<PackageReference Include="NAudio" Version="2.2.1" />
 		<PackageReference Include="Octokit" Version="13.0.1" />
 	</ItemGroup>
 </Project>
