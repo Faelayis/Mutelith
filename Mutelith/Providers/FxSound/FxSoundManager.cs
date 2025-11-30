@@ -5,14 +5,15 @@ using System.IO;
 using System.Text.Json;
 
 namespace Mutelith {
-	public class SonarManager : IDisposable {
+	public class FxSoundManager : IAudioManager {
 		private readonly AudioDeviceEnumerator _enumerator;
 		private readonly string _configPath;
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
-		private AudioDevice _sonarMicDevice;
+		private AudioDevice _fxSoundSpeakersDevice;
 		private DateTime _lastDeviceCacheTime;
 		private readonly TimeSpan _cacheExpiration = TimeSpan.FromSeconds(AppConstants.DEVICE_CACHE_EXPIRATION_SECONDS);
-		public SonarManager() {
+
+		public FxSoundManager() {
 			_enumerator = new AudioDeviceEnumerator();
 			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
 			_lastDeviceCacheTime = DateTime.MinValue;
@@ -20,52 +21,52 @@ namespace Mutelith {
 			if (!Directory.Exists(AppConstants.INSTALL_FOLDER)) {
 				Directory.CreateDirectory(AppConstants.INSTALL_FOLDER);
 			}
-			_configPath = AppConstants.CONFIG_PATH;
+			_configPath = Path.Combine(AppConstants.INSTALL_FOLDER, "fxsound_config.json");
 		}
 
 		public void InitializeAndSaveConfigs() {
-			bool sonarMicFound = CheckSonarMicrophoneExists();
+			bool fxSoundFound = CheckFxSoundSpeakersExists();
 
-			if (!sonarMicFound) {
-				Logger.Warning("SteelSeries Sonar - Microphone not found - restoring default settings");
+			if (!fxSoundFound) {
+				Logger.Warning("FxSound Speakers not found - restoring default settings");
 				RestoreDefaultConfigs();
 				return;
 			}
 
 			SaveDefaultConfigs();
-			FindAndConfigureSonarMicrophone();
+			FindAndConfigureFxSoundSpeakers();
 		}
 
 		public void ApplyMuteSettings() {
-			bool sonarMicFound = CheckSonarMicrophoneExists();
+			bool fxSoundFound = CheckFxSoundSpeakersExists();
 
-			if (!sonarMicFound) {
-				Logger.Warning("SteelSeries Sonar - Microphone not found");
+			if (!fxSoundFound) {
+				Logger.Warning("FxSound Speakers not found");
 				return;
 			}
 
-			FindAndConfigureSonarMicrophone();
+			FindAndConfigureFxSoundSpeakers();
 		}
 
-		private AudioDevice GetSonarMicrophoneDevice(bool forceRefresh = false) {
+		private AudioDevice GetFxSoundSpeakersDevice(bool forceRefresh = false) {
 			if (!forceRefresh &&
-				 _sonarMicDevice != null &&
+				 _fxSoundSpeakersDevice != null &&
 				 DateTime.Now - _lastDeviceCacheTime < _cacheExpiration) {
 				try {
-					var state = _sonarMicDevice.State;
+					var state = _fxSoundSpeakersDevice.State;
 					if (state == DeviceState.Active) {
-						return _sonarMicDevice;
+						return _fxSoundSpeakersDevice;
 					}
 				} catch {
 				}
 			}
 
-			_sonarMicDevice?.Dispose();
-			_sonarMicDevice = null;
+			_fxSoundSpeakersDevice?.Dispose();
+			_fxSoundSpeakersDevice = null;
 
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_MICROPHONE, StringComparison.OrdinalIgnoreCase)) {
-					_sonarMicDevice = device;
+				if (device.FriendlyName.Contains(FxSoundConfig.DEVICE_FXSOUND_SPEAKERS, StringComparison.OrdinalIgnoreCase)) {
+					_fxSoundSpeakersDevice = device;
 					_lastDeviceCacheTime = DateTime.Now;
 					Logger.Info($"Found and cached device: {device.FriendlyName}");
 					break;
@@ -74,11 +75,11 @@ namespace Mutelith {
 				}
 			}
 
-			return _sonarMicDevice;
+			return _fxSoundSpeakersDevice;
 		}
 
-		private bool CheckSonarMicrophoneExists() {
-			return GetSonarMicrophoneDevice() != null;
+		private bool CheckFxSoundSpeakersExists() {
+			return GetFxSoundSpeakersDevice() != null;
 		}
 
 		private void ForEachAudioSession(Action<AudioDevice, AudioSession> action) {
@@ -133,20 +134,22 @@ namespace Mutelith {
 			}
 		}
 
-		private bool FindAndConfigureSonarMicrophone() {
+		private bool FindAndConfigureFxSoundSpeakers() {
 			int discordMutedCount = 0;
-			var sonarMic = GetSonarMicrophoneDevice();
+			var fxSoundSpeakers = GetFxSoundSpeakersDevice();
 
-			if (sonarMic != null) {
-				discordMutedCount += MuteDiscordInDevice(sonarMic);
+			if (fxSoundSpeakers != null) {
+				discordMutedCount += MuteDiscordInDevice(fxSoundSpeakers);
 			}
 
 			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				if (device.FriendlyName.Contains(SonarConfig.DEVICE_SONAR_PREFIX, StringComparison.OrdinalIgnoreCase)) {
+				if (device.FriendlyName.Contains(FxSoundConfig.DEVICE_FXSOUND_PREFIX, StringComparison.OrdinalIgnoreCase)) {
+					device.Dispose();
 					continue;
 				}
 
 				discordMutedCount += MuteDiscordInDevice(device);
+				device.Dispose();
 			}
 
 			if (discordMutedCount > 0) {
@@ -234,13 +237,13 @@ namespace Mutelith {
 		}
 
 		public void ClearDeviceCache() {
-			_sonarMicDevice?.Dispose();
-			_sonarMicDevice = null;
+			_fxSoundSpeakersDevice?.Dispose();
+			_fxSoundSpeakersDevice = null;
 			_lastDeviceCacheTime = DateTime.MinValue;
 		}
 
 		public void Dispose() {
-			_sonarMicDevice?.Dispose();
+			_fxSoundSpeakersDevice?.Dispose();
 			_enumerator?.Dispose();
 		}
 	}

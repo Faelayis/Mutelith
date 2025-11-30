@@ -40,6 +40,22 @@ namespace Mutelith.Audio.CoreAudio {
 				}
 			}
 		}
+		public AudioDevice GetDefaultAudioEndpoint(DataFlow dataFlow, Role role) {
+			if (_enumerator == null) {
+				return null;
+			}
+
+			try {
+				IMMDevice device;
+				int hr = _enumerator.GetDefaultAudioEndpoint(dataFlow, role, out device);
+				if (hr == 0 && device != null) {
+					return new AudioDevice(device);
+				}
+			} catch {
+			}
+
+			return null;
+		}
 
 		public void Dispose() {
 			if (_enumerator != null) {

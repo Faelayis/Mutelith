@@ -7,6 +7,7 @@ namespace Mutelith.Audio.CoreAudio {
 		private IMMDevice _device;
 		private string _friendlyName;
 		private DeviceState _state;
+		internal IMMDevice Device => _device;
 
 		internal AudioDevice(IMMDevice device) {
 			_device = device;

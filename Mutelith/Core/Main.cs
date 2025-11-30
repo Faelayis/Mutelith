@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 class Program {
 	private static NotifyIcon trayIcon;
-	private static SonarManager audioManager;
+	private static IAudioManager audioManager;
 	private static bool isRunning = true;
 	private static bool isSilent = false;
 
@@ -81,13 +81,26 @@ class Program {
 				return;
 			}
 
-			audioManager = new SonarManager();
+			audioManager = AudioManagerFactory.CreateManager();
 			bool wasDiscordRunning = false;
 			bool hasInitialized = false;
 			bool wasFullscreen = false;
 
 			while (isRunning) {
 				try {
+					if (audioManager == null) {
+						audioManager = AudioManagerFactory.CreateManager();
+						if (audioManager != null) {
+							hasInitialized = false;
+							Logger.Info("Audio device manager initialized successfully");
+						}
+					}
+
+					if (audioManager == null) {
+						Thread.Sleep(AppConstants.MONITORING_INTERVAL_MS);
+						continue;
+					}
+
 					int discordInstanceCount = DiscordDetector.GetInstanceCount();
 					bool isDiscordRunning = discordInstanceCount > 0;
 					bool isFullscreen = FullscreenDetector.IsFullscreenAppActive();
