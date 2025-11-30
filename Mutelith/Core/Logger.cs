@@ -4,9 +4,11 @@ using System.IO;
 namespace Mutelith {
 	public static class Logger {
 		private static bool _devMode = false;
+		private static bool _noLogs = false;
 
-		public static void Initialize(bool devMode = false) {
+		public static void Initialize(bool devMode = false, bool noLogs = false) {
 			_devMode = devMode;
+			_noLogs = noLogs;
 		}
 
 		public static void Info(string message) {
@@ -26,6 +28,8 @@ namespace Mutelith {
 		}
 
 		private static void LogMessage(string message) {
+			if (_noLogs) return;
+
 			try {
 				string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}";
 

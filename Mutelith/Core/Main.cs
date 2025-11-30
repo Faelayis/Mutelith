@@ -16,12 +16,13 @@ class Program {
 
 		bool devMode = Array.Exists(args, arg => arg == AppConstants.ARG_DEV_MODE);
 		bool silentMode = Array.Exists(args, arg => arg == AppConstants.ARG_SILENT_MODE);
+		bool noLogs = Array.Exists(args, arg => arg == AppConstants.ARG_NO_LOGS);
 
 		if (args.Length == 0) {
 			devMode = true;
 		}
 
-		Logger.Initialize(devMode);
+		Logger.Initialize(devMode, noLogs);
 		isSilent = silentMode;
 
 		System.Diagnostics.Debug.WriteLine($"Dev Mode: {devMode}, Silent Mode: {silentMode}");
