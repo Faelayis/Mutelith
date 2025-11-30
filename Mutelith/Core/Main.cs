@@ -18,10 +18,6 @@ class Program {
 		bool silentMode = Array.Exists(args, arg => arg == AppConstants.ARG_SILENT_MODE);
 		bool logs = Array.Exists(args, arg => arg == AppConstants.ARG_LOGS);
 
-		if (args.Length == 0) {
-			devMode = true;
-		}
-
 		Logger.Initialize(devMode, logs);
 		isSilent = silentMode;
 
