@@ -20,22 +20,24 @@ Mutelith automatically mutes Discord on the “wrong” devices, keeps it on the
 
 <!-- prettier-ignore -->
 > [!WARNING]
-> Mutelith is currently designed and tested for **one active audio stack (provider) at a time**.  
+> Mutelith is currently designed and tested for **one active audio stack (provider) at a time**<br>
 > Using multiple virtual audio providers together (e.g. Sonar + FxSound at the same time) may cause the detection and rules to behave incorrectly.
 
 ## Downloads ⬇️
 
 You’ll usually see **two builds** in the releases:
 
+<!-- prettier-ignore -->
+> [!NOTE]
+> **Not sure which one to use?**<br>
+> Try `Mutelith-native.exe` first.<br>
+> If it fails with a “missing .NET” or runtime error, use `Mutelith.exe` instead.
+
 ### [`Mutelith.exe`](https://github.com/Faelayis/Mutelith/releases)
 
 - Larger file size
 - Does **not** require any .NET runtime installed (good for “clean” or locked-down machines)
 - Useful if you want a **portable** EXE that “just runs” on most Windows 10/11 systems
-
-> **Not sure which one to use?**  
-> Try `Mutelith-native.exe` first.  
-> If it fails with a “missing .NET” or runtime error, use `Mutelith.exe` instead.
 
 ### [`Mutelith-native.exe`](https://github.com/Faelayis/Mutelith/releases)
 
