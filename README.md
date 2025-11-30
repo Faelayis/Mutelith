@@ -13,11 +13,15 @@ Mutelith automatically mutes Discord on the “wrong” devices, keeps it on the
 
 ## Supported audio stacks 🎛️
 
-| Providers                                             | Rule Support | Status     | Notes                                                                 |
-| ----------------------------------------------------- | ------------ | ---------- | --------------------------------------------------------------------- |
-| [SteelSeries Sonar](https://steelseries.com/gg/sonar) | `ViewerEcho` | ✅ Live    | -                                                                     |
-| [FxSound](https://www.fxsound.com/)                   | `ViewerEcho` | ✅ Live    | -                                                                     |
-| Default / Other                                       | –            | ⚠️ No rule | No special rule yet; Mutelith skips echo handling for unknown stacks. |
+| Providers                                             | Rule Support | Status  | Notes |
+| ----------------------------------------------------- | ------------ | ------- | ----- |
+| [SteelSeries Sonar](https://steelseries.com/gg/sonar) | `ViewerEcho` | ✅ Live | -     |
+| [FxSound](https://www.fxsound.com/)                   | `ViewerEcho` | ✅ Live | -     |
+
+<!-- prettier-ignore -->
+> [!WARNING]
+> Mutelith is currently designed and tested for **one active audio stack (provider) at a time**.  
+> Using multiple virtual audio providers together (e.g. Sonar + FxSound at the same time) may cause the detection and rules to behave incorrectly.
 
 ## Downloads ⬇️
 
