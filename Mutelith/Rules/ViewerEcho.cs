@@ -9,12 +9,14 @@ namespace Mutelith {
 		private readonly AudioDeviceEnumerator _enumerator;
 		private readonly string _configPath;
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
+		private HashSet<uint> _mutedProcessIds;
 		protected abstract string TargetDeviceName { get; }
 		protected abstract string DevicePrefix { get; }
 		protected abstract string ConfigFileName { get; }
 		protected ViewerEcho() {
 			_enumerator = new AudioDeviceEnumerator();
 			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
+			_mutedProcessIds = new HashSet<uint>();
 
 			if (!Directory.Exists(AppConstants.INSTALL_FOLDER)) {
 				Directory.CreateDirectory(AppConstants.INSTALL_FOLDER);
@@ -23,6 +25,7 @@ namespace Mutelith {
 		}
 
 		public void InitializeAndSaveConfigs() {
+			_mutedProcessIds.Clear();
 			bool deviceFound = CheckTargetDeviceExists();
 
 			if (!deviceFound) {
@@ -168,10 +171,17 @@ namespace Mutelith {
 						if (process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD, StringComparison.OrdinalIgnoreCase) ||
 							process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_PTB, StringComparison.OrdinalIgnoreCase) ||
 							process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_DEV, StringComparison.OrdinalIgnoreCase)) {
+
+							if (_mutedProcessIds.Contains(processId) && session.Mute) {
+								session.Dispose();
+								continue;
+							}
+
 							session.Volume = 0f;
 							session.Mute = true;
+							_mutedProcessIds.Add(processId);
 							mutedCount++;
-							Logger.Success($"{process.ProcessName} muted in {device.FriendlyName}");
+							Logger.Success($"{process.ProcessName} (PID: {processId}) muted in {device.FriendlyName}");
 						}
 
 						session.Dispose();
@@ -223,6 +233,7 @@ namespace Mutelith {
 		}
 
 		public void RestoreSettings() {
+			_mutedProcessIds.Clear();
 			RestoreDefaultConfigs();
 		}
 
