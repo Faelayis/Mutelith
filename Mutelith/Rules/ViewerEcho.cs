@@ -10,6 +10,8 @@ namespace Mutelith {
 		private readonly string _configPath;
 		private Dictionary<string, AudioSessionConfig> _savedConfigs;
 		private HashSet<uint> _mutedProcessIds;
+		private bool _lastDiscordFoundState = false;
+		private int _lastDiscordMutedCount = 0;
 		protected abstract string TargetDeviceName { get; }
 		protected abstract string DevicePrefix { get; }
 		protected abstract string ConfigFileName { get; }
@@ -141,10 +143,16 @@ namespace Mutelith {
 				device.Dispose();
 			}
 
-			if (discordMutedCount > 0) {
-				Logger.Info($"Total Discord sessions muted: {discordMutedCount}");
-			} else {
-				Logger.Warning("Discord audio session not found in any device");
+			bool discordFound = discordMutedCount > 0;
+
+			if (discordFound != _lastDiscordFoundState || discordMutedCount != _lastDiscordMutedCount) {
+				if (discordFound) {
+					Logger.Info($"Total Discord sessions muted: {discordMutedCount}");
+				} else {
+					Logger.Info("Waiting for Discord audio session (e.g., screen share, streaming)");
+				}
+				_lastDiscordFoundState = discordFound;
+				_lastDiscordMutedCount = discordMutedCount;
 			}
 
 			return true;
@@ -177,11 +185,15 @@ namespace Mutelith {
 								continue;
 							}
 
+							bool isNewMute = !_mutedProcessIds.Contains(processId);
 							session.Volume = 0f;
 							session.Mute = true;
 							_mutedProcessIds.Add(processId);
 							mutedCount++;
-							Logger.Success($"{process.ProcessName} (PID: {processId}) muted in {device.FriendlyName}");
+
+							if (isNewMute) {
+								Logger.Success($"{process.ProcessName} (PID: {processId}) muted in {device.FriendlyName}");
+							}
 						}
 
 						session.Dispose();

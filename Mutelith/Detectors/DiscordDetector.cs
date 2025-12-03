@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace Mutelith {
@@ -21,6 +22,27 @@ namespace Mutelith {
 			} catch {
 				return 0;
 			}
+		}
+
+		public static Dictionary<int, string> GetRunningInstances() {
+			var instances = new Dictionary<int, string>();
+			try {
+				var discordProcesses = Process.GetProcessesByName(PROCESS_NAME_DISCORD);
+				var discordPtbProcesses = Process.GetProcessesByName(PROCESS_NAME_DISCORD_PTB);
+				var discordDevProcesses = Process.GetProcessesByName(PROCESS_NAME_DISCORD_DEV);
+
+				foreach (var process in discordProcesses) {
+					instances[process.Id] = PROCESS_NAME_DISCORD;
+				}
+				foreach (var process in discordPtbProcesses) {
+					instances[process.Id] = PROCESS_NAME_DISCORD_PTB;
+				}
+				foreach (var process in discordDevProcesses) {
+					instances[process.Id] = PROCESS_NAME_DISCORD_DEV;
+				}
+			} catch {
+			}
+			return instances;
 		}
 	}
 }

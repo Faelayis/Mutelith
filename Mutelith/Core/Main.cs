@@ -90,12 +90,27 @@ class Program {
 			bool wasDiscordRunning = false;
 			bool hasInitialized = false;
 			bool wasFullscreen = false;
+			var lastDiscordInstances = new System.Collections.Generic.Dictionary<int, string>();
 
 			while (isRunning) {
 				try {
 					AudioDeviceType detectedType = AudioDeviceDetector.DetectDefaultDevice(verbose: false);
-					int discordInstanceCount = DiscordDetector.GetInstanceCount();
-					bool isDiscordRunning = discordInstanceCount > 0;
+					var currentDiscordInstances = DiscordDetector.GetRunningInstances();
+					bool isDiscordRunning = currentDiscordInstances.Count > 0;
+
+					foreach (var kvp in lastDiscordInstances) {
+						if (!currentDiscordInstances.ContainsKey(kvp.Key)) {
+							Logger.Info($"{kvp.Value} (PID: {kvp.Key}) stopped");
+						}
+					}
+
+					foreach (var kvp in currentDiscordInstances) {
+						if (!lastDiscordInstances.ContainsKey(kvp.Key)) {
+							Logger.Info($"{kvp.Value} (PID: {kvp.Key}) started");
+						}
+					}
+
+					lastDiscordInstances = currentDiscordInstances;
 
 					if (detectedType != currentDeviceType) {
 						AudioDeviceDetector.DetectDefaultDevice(verbose: true);
@@ -152,8 +167,6 @@ class Program {
 								}
 								hasInitialized = true;
 							}
-						} else {
-							Logger.Info("Discord stopped");
 						}
 						wasDiscordRunning = isDiscordRunning;
 					} else if (isDiscordRunning) {
