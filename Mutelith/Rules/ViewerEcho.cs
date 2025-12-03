@@ -1,14 +1,11 @@
 using Mutelith.Audio.CoreAudio;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
 
 namespace Mutelith {
 	public abstract class ViewerEcho : IAudioManager {
 		private readonly AudioDeviceEnumerator _enumerator;
-		private readonly string _configPath;
-		private Dictionary<string, AudioSessionConfig> _savedConfigs;
+		private readonly AudioConfigManager _configManager;
 		private HashSet<uint> _mutedProcessIds;
 		private bool _lastDiscordFoundState = false;
 		private int _lastDiscordMutedCount = 0;
@@ -17,13 +14,8 @@ namespace Mutelith {
 		protected abstract string ConfigFileName { get; }
 		protected ViewerEcho() {
 			_enumerator = new AudioDeviceEnumerator();
-			_savedConfigs = new Dictionary<string, AudioSessionConfig>();
+			_configManager = new AudioConfigManager(ConfigFileName);
 			_mutedProcessIds = new HashSet<uint>();
-
-			if (!Directory.Exists(AppConstants.INSTALL_FOLDER)) {
-				Directory.CreateDirectory(AppConstants.INSTALL_FOLDER);
-			}
-			_configPath = Path.Combine(AppConstants.INSTALL_FOLDER, ConfigFileName);
 		}
 
 		public void InitializeAndSaveConfigs() {
@@ -32,11 +24,11 @@ namespace Mutelith {
 
 			if (!deviceFound) {
 				Logger.Warning($"{TargetDeviceName} not found - restoring default settings");
-				RestoreDefaultConfigs();
+				_configManager.RestoreConfigs(_enumerator);
 				return;
 			}
 
-			SaveDefaultConfigs();
+			_configManager.SaveConfigs(_enumerator);
 			FindAndConfigureTargetDevice();
 		}
 
@@ -72,57 +64,6 @@ namespace Mutelith {
 			return false;
 		}
 
-		private void ForEachAudioSession(Action<AudioDevice, AudioSession> action) {
-			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
-				using (var sessionManager = device.GetAudioSessionManager()) {
-					if (sessionManager == null) {
-						device.Dispose();
-						continue;
-					}
-
-					foreach (var session in sessionManager.GetSessions()) {
-						try {
-							action(device, session);
-							session.Dispose();
-						} catch {
-							session.Dispose();
-						}
-					}
-				}
-				device.Dispose();
-			}
-		}
-
-		private void SaveDefaultConfigs() {
-			Logger.Info("Saving default audio configurations...");
-			_savedConfigs.Clear();
-
-			ForEachAudioSession((device, session) => {
-				var processId = session.ProcessId;
-				if (processId == 0) return;
-
-				var process = System.Diagnostics.Process.GetProcessById((int)processId);
-				string key = $"{device.FriendlyName}_{process.ProcessName}_{processId}";
-
-				var config = new AudioSessionConfig {
-					DeviceName = device.FriendlyName,
-					ProcessName = process.ProcessName,
-					ProcessId = processId,
-					Volume = session.Volume,
-					IsMuted = session.Mute
-				};
-
-				_savedConfigs[key] = config;
-			});
-
-			try {
-				string json = JsonSerializer.Serialize(_savedConfigs, new JsonSerializerOptions { WriteIndented = true });
-				File.WriteAllText(_configPath, json);
-				Logger.Success($"Saved {_savedConfigs.Count} audio session configurations");
-			} catch (Exception ex) {
-				Logger.Error($"Failed to save config file: {ex.Message}");
-			}
-		}
 
 		private bool FindAndConfigureTargetDevice() {
 			int discordMutedCount = 0;
@@ -205,48 +146,9 @@ namespace Mutelith {
 			return mutedCount;
 		}
 
-		private void RestoreDefaultConfigs() {
-			if (_savedConfigs.Count == 0) {
-				try {
-					if (File.Exists(_configPath)) {
-						string json = File.ReadAllText(_configPath);
-						_savedConfigs = JsonSerializer.Deserialize<Dictionary<string, AudioSessionConfig>>(json)
-										?? new Dictionary<string, AudioSessionConfig>();
-					}
-				} catch (Exception ex) {
-					Logger.Error($"Failed to load config file: {ex.Message}");
-					return;
-				}
-			}
-
-			if (_savedConfigs.Count == 0) {
-				Logger.Warning("No saved configurations to restore");
-				return;
-			}
-
-			Logger.Info("Restoring default audio configurations...");
-			int restoredCount = 0;
-
-			ForEachAudioSession((device, session) => {
-				var processId = session.ProcessId;
-				if (processId == 0) return;
-
-				var process = System.Diagnostics.Process.GetProcessById((int)processId);
-				string key = $"{device.FriendlyName}_{process.ProcessName}_{processId}";
-
-				if (_savedConfigs.TryGetValue(key, out var config)) {
-					session.Volume = config.Volume;
-					session.Mute = config.IsMuted;
-					restoredCount++;
-				}
-			});
-
-			Logger.Success($"Restored {restoredCount} audio session configurations");
-		}
-
 		public void RestoreSettings() {
 			_mutedProcessIds.Clear();
-			RestoreDefaultConfigs();
+			_configManager.RestoreConfigs(_enumerator);
 		}
 
 		public void Dispose() {
