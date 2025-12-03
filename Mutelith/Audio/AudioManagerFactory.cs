@@ -1,8 +1,6 @@
 namespace Mutelith {
 	public static class AudioManagerFactory {
-		public static IAudioManager CreateManager() {
-			var deviceType = AudioDeviceDetector.DetectDefaultDevice();
-
+		public static IAudioManager CreateManager(AudioDeviceType deviceType) {
 			switch (deviceType) {
 				case AudioDeviceType.SteelSeriesSonar:
 					Logger.Info("Using SonarManager for audio management");

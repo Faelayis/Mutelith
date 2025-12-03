@@ -85,19 +85,20 @@ class Program {
 				return;
 			}
 
-			audioManager = AudioManagerFactory.CreateManager();
-			AudioDeviceType currentDeviceType = AudioDeviceDetector.DetectDefaultDevice();
+			AudioDeviceType currentDeviceType = AudioDeviceType.None;
+			audioManager = null;
 			bool wasDiscordRunning = false;
 			bool hasInitialized = false;
 			bool wasFullscreen = false;
 
 			while (isRunning) {
 				try {
-					AudioDeviceType detectedType = AudioDeviceDetector.DetectDefaultDevice();
+					AudioDeviceType detectedType = AudioDeviceDetector.DetectDefaultDevice(verbose: false);
 					int discordInstanceCount = DiscordDetector.GetInstanceCount();
 					bool isDiscordRunning = discordInstanceCount > 0;
 
 					if (detectedType != currentDeviceType) {
+						AudioDeviceDetector.DetectDefaultDevice(verbose: true);
 						Logger.Info($"Default device changed from {currentDeviceType} to {detectedType}");
 						if (audioManager != null) {
 							audioManager.RestoreSettings();
@@ -108,7 +109,7 @@ class Program {
 						hasInitialized = false;
 
 						if (currentDeviceType != AudioDeviceType.None) {
-							audioManager = AudioManagerFactory.CreateManager();
+							audioManager = AudioManagerFactory.CreateManager(currentDeviceType);
 							if (audioManager != null) {
 								Logger.Info("Audio device manager initialized successfully");
 								if (isDiscordRunning) {
@@ -120,7 +121,7 @@ class Program {
 					}
 
 					if (audioManager == null && currentDeviceType != AudioDeviceType.None) {
-						audioManager = AudioManagerFactory.CreateManager();
+						audioManager = AudioManagerFactory.CreateManager(currentDeviceType);
 						if (audioManager != null) {
 							Logger.Info("Audio device manager initialized successfully");
 						}
@@ -152,7 +153,7 @@ class Program {
 								hasInitialized = true;
 							}
 						} else {
-							Logger.Info("Discord stopped - restoring settings");
+							Logger.Info("Discord stopped");
 						}
 						wasDiscordRunning = isDiscordRunning;
 					} else if (isDiscordRunning) {
