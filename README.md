@@ -42,7 +42,7 @@ You’ll usually see **two builds** in the releases:
 ### [`Mutelith-native.exe`](https://github.com/Faelayis/Mutelith/releases)
 
 - Smaller file size
-- Requires the [**.NET 8 SDK**](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) or [**Desktop Runtime**](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) to be installed on Windows
+- Requires the [**.NET 8 SDK**](https://aka.ms/dotnet/8.0/dotnet-sdk-win-x64.exe) or [**Desktop Runtime**](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe) to be installed on Windows
 
 ## Contributing 🤝
 
