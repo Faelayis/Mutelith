@@ -18,7 +18,11 @@ namespace Mutelith {
 			};
 			contextMenu.Items.Add(versionItem);
 			contextMenu.Items.Add(new ToolStripSeparator());
-			contextMenu.Items.Add("Show Logs", null, (s, e) => ShowLogsFolder());
+
+			if (System.IO.File.Exists(AppConstants.LOG_PATH)) {
+				contextMenu.Items.Add("Show Logs", null, (s, e) => ShowLogsFile());
+			}
+
 			contextMenu.Items.Add("GitHub", null, (s, e) => OpenGitHubRepository());
 			contextMenu.Items.Add(new ToolStripSeparator());
 			contextMenu.Items.Add("Exit", null, exitHandler);
@@ -27,13 +31,16 @@ namespace Mutelith {
 			return trayIcon;
 		}
 
-		private static void ShowLogsFolder() {
+		private static void ShowLogsFile() {
 			try {
-				if (System.IO.Directory.Exists(AppConstants.INSTALL_FOLDER)) {
-					System.Diagnostics.Process.Start("explorer.exe", AppConstants.INSTALL_FOLDER);
+				if (System.IO.File.Exists(AppConstants.LOG_PATH)) {
+					System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
+						FileName = AppConstants.LOG_PATH,
+						UseShellExecute = true
+					});
 				}
 			} catch (Exception ex) {
-				Logger.Error($"Error opening logs folder: {ex.Message}");
+				Logger.Error($"Error opening log file: {ex.Message}");
 			}
 		}
 
