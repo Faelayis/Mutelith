@@ -115,8 +115,13 @@ class Program {
 					if (detectedType != currentDeviceType) {
 						AudioDeviceDetector.DetectDefaultDevice(verbose: true);
 						Logger.Info($"Default device changed from {currentDeviceType} to {detectedType}");
+
+						bool shouldRestoreSettings = audioManager != null && detectedType == AudioDeviceType.None;
+
 						if (audioManager != null) {
-							audioManager.RestoreSettings();
+							if (shouldRestoreSettings) {
+								audioManager.RestoreSettings();
+							}
 							audioManager.Dispose();
 							audioManager = null;
 						}

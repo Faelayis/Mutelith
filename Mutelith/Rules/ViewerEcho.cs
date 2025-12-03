@@ -5,16 +5,13 @@ using System.Collections.Generic;
 namespace Mutelith {
 	public abstract class ViewerEcho : IAudioManager {
 		private readonly AudioDeviceEnumerator _enumerator;
-		private readonly AudioConfigManager _configManager;
 		private HashSet<uint> _mutedProcessIds;
 		private bool _lastDiscordFoundState = false;
 		private int _lastDiscordMutedCount = 0;
 		protected abstract string TargetDeviceName { get; }
 		protected abstract string DevicePrefix { get; }
-		protected abstract string ConfigFileName { get; }
 		protected ViewerEcho() {
 			_enumerator = new AudioDeviceEnumerator();
-			_configManager = new AudioConfigManager(ConfigFileName);
 			_mutedProcessIds = new HashSet<uint>();
 		}
 
@@ -23,12 +20,10 @@ namespace Mutelith {
 			bool deviceFound = CheckTargetDeviceExists();
 
 			if (!deviceFound) {
-				Logger.Warning($"{TargetDeviceName} not found - restoring default settings");
-				_configManager.RestoreConfigs(_enumerator);
+				Logger.Warning($"{TargetDeviceName} not found");
 				return;
 			}
 
-			_configManager.SaveConfigs(_enumerator);
 			FindAndConfigureTargetDevice();
 		}
 
@@ -147,8 +142,61 @@ namespace Mutelith {
 		}
 
 		public void RestoreSettings() {
+			UnmuteAllDiscord();
 			_mutedProcessIds.Clear();
-			_configManager.RestoreConfigs(_enumerator);
+		}
+
+		private void UnmuteAllDiscord() {
+			if (_mutedProcessIds.Count == 0) {
+				return;
+			}
+
+			var defaultDevice = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+			if (defaultDevice == null) {
+				Logger.Warning("Could not get default audio device");
+				return;
+			}
+
+			Logger.Info($"Unmuting Discord sessions in default device: {defaultDevice.FriendlyName}");
+			int unmutedCount = 0;
+
+			using (var sessionManager = defaultDevice.GetAudioSessionManager()) {
+				if (sessionManager != null) {
+					foreach (var session in sessionManager.GetSessions()) {
+						try {
+							var processId = session.ProcessId;
+							if (processId == 0 || !_mutedProcessIds.Contains(processId)) {
+								session.Dispose();
+								continue;
+							}
+
+							var process = System.Diagnostics.Process.GetProcessById((int)processId);
+
+							if (process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD, StringComparison.OrdinalIgnoreCase) ||
+								process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_PTB, StringComparison.OrdinalIgnoreCase) ||
+								process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_DEV, StringComparison.OrdinalIgnoreCase)) {
+
+								session.Mute = false;
+								session.Volume = 1.0f;
+								unmutedCount++;
+								Logger.Success($"{process.ProcessName} (PID: {processId}) unmuted in {defaultDevice.FriendlyName}");
+							}
+
+							session.Dispose();
+						} catch {
+							session.Dispose();
+						}
+					}
+				}
+			}
+
+			defaultDevice.Dispose();
+
+			if (unmutedCount > 0) {
+				Logger.Success($"Unmuted {unmutedCount} Discord session(s)");
+			} else {
+				Logger.Info("No Discord sessions to unmute in default device");
+			}
 		}
 
 		public void Dispose() {
