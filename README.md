@@ -36,14 +36,13 @@ You’ll usually see **two builds** in the releases:
 ### [`Mutelith.exe`](https://github.com/Faelayis/Mutelith/releases)
 
 - Larger file size
-- Does **not** require any .NET runtime installed (good for “clean” or locked-down machines)
 - Useful if you want a **portable** EXE that “just runs” on most Windows 10/11 systems
+- Does **not** require any .NET runtime installed
 
 ### [`Mutelith-native.exe`](https://github.com/Faelayis/Mutelith/releases)
 
-- Classic **framework-dependent** .NET build
 - Smaller file size
-- Requires the [**.NET 8 SDK or Desktop Runtime**](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) to be installed on Windows
+- Requires the [**.NET 8 SDK**](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) or [**Desktop Runtime**](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) to be installed on Windows
 
 ## Contributing 🤝
 
