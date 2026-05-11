@@ -106,34 +106,32 @@ namespace Mutelith {
 					try {
 						var processId = session.ProcessId;
 						if (processId == 0) {
-							session.Dispose();
 							continue;
 						}
 
-						var process = System.Diagnostics.Process.GetProcessById((int)processId);
+						using var process = System.Diagnostics.Process.GetProcessById((int)processId);
 
-						if (process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD, StringComparison.OrdinalIgnoreCase) ||
-							process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_PTB, StringComparison.OrdinalIgnoreCase) ||
-							process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_DEV, StringComparison.OrdinalIgnoreCase)) {
-
-							if (_mutedProcessIds.Contains(processId) && session.Mute) {
-								session.Dispose();
-								continue;
-							}
-
-							bool isNewMute = !_mutedProcessIds.Contains(processId);
-							session.Volume = 0f;
-							session.Mute = true;
-							_mutedProcessIds.Add(processId);
-							mutedCount++;
-
-							if (isNewMute) {
-								Logger.Success($"{process.ProcessName} (PID: {processId}) muted in {device.FriendlyName}");
-							}
+						if (!IsDiscordProcess(process.ProcessName)) {
+							continue;
 						}
 
-						session.Dispose();
+						if (_mutedProcessIds.Contains(processId) && session.Mute) {
+							mutedCount++;
+							continue;
+						}
+
+						bool isNewMute = !_mutedProcessIds.Contains(processId);
+						session.Volume = 0f;
+						session.Mute = true;
+						_mutedProcessIds.Add(processId);
+						mutedCount++;
+
+						if (isNewMute) {
+							Logger.Success($"{process.ProcessName} (PID: {processId}) muted in {device.FriendlyName}");
+						}
 					} catch {
+					} finally {
+						session.Dispose();
 					}
 				}
 			}
@@ -151,52 +149,65 @@ namespace Mutelith {
 				return;
 			}
 
-			var defaultDevice = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-			if (defaultDevice == null) {
-				Logger.Warning("Could not get default audio device");
-				return;
-			}
-
-			Logger.Info($"Unmuting Discord sessions in default device: {defaultDevice.FriendlyName}");
 			int unmutedCount = 0;
 
-			using (var sessionManager = defaultDevice.GetAudioSessionManager()) {
-				if (sessionManager != null) {
-					foreach (var session in sessionManager.GetSessions()) {
-						try {
-							var processId = session.ProcessId;
-							if (processId == 0 || !_mutedProcessIds.Contains(processId)) {
-								session.Dispose();
-								continue;
-							}
-
-							var process = System.Diagnostics.Process.GetProcessById((int)processId);
-
-							if (process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD, StringComparison.OrdinalIgnoreCase) ||
-								process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_PTB, StringComparison.OrdinalIgnoreCase) ||
-								process.ProcessName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_DEV, StringComparison.OrdinalIgnoreCase)) {
-
-								session.Mute = false;
-								session.Volume = 1.0f;
-								unmutedCount++;
-								Logger.Success($"{process.ProcessName} (PID: {processId}) unmuted in {defaultDevice.FriendlyName}");
-							}
-
-							session.Dispose();
-						} catch {
-							session.Dispose();
-						}
-					}
+			foreach (var device in _enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)) {
+				if (device.FriendlyName.Contains(DevicePrefix, StringComparison.OrdinalIgnoreCase) &&
+					!device.FriendlyName.Contains(TargetDeviceName, StringComparison.OrdinalIgnoreCase)) {
+					device.Dispose();
+					continue;
 				}
-			}
 
-			defaultDevice.Dispose();
+				unmutedCount += UnmuteDiscordInDevice(device);
+				device.Dispose();
+			}
 
 			if (unmutedCount > 0) {
 				Logger.Success($"Unmuted {unmutedCount} Discord session(s)");
 			} else {
-				Logger.Info("No Discord sessions to unmute in default device");
+				Logger.Info("No Discord sessions to unmute");
 			}
+		}
+
+		private int UnmuteDiscordInDevice(AudioDevice device) {
+			int unmutedCount = 0;
+
+			using (var sessionManager = device.GetAudioSessionManager()) {
+				if (sessionManager == null) {
+					return unmutedCount;
+				}
+
+				foreach (var session in sessionManager.GetSessions()) {
+					try {
+						var processId = session.ProcessId;
+						if (processId == 0 || !_mutedProcessIds.Contains(processId)) {
+							continue;
+						}
+
+						using var process = System.Diagnostics.Process.GetProcessById((int)processId);
+
+						if (!IsDiscordProcess(process.ProcessName)) {
+							continue;
+						}
+
+						session.Mute = false;
+						session.Volume = 1.0f;
+						unmutedCount++;
+						Logger.Success($"{process.ProcessName} (PID: {processId}) unmuted in {device.FriendlyName}");
+					} catch {
+					} finally {
+						session.Dispose();
+					}
+				}
+			}
+
+			return unmutedCount;
+		}
+
+		private static bool IsDiscordProcess(string processName) {
+			return processName.Equals(DiscordDetector.PROCESS_NAME_DISCORD, StringComparison.OrdinalIgnoreCase) ||
+				processName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_PTB, StringComparison.OrdinalIgnoreCase) ||
+				processName.Equals(DiscordDetector.PROCESS_NAME_DISCORD_DEV, StringComparison.OrdinalIgnoreCase);
 		}
 
 		public void Dispose() {

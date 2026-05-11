@@ -49,6 +49,17 @@ class Program {
 
 	private static void OnExit() {
 		isRunning = false;
+
+		try {
+			if (audioManager != null) {
+				audioManager.RestoreSettings();
+				audioManager.Dispose();
+				audioManager = null;
+			}
+		} catch (Exception ex) {
+			Logger.Error($"Error restoring audio on exit: {ex.Message}");
+		}
+
 		trayIcon.Visible = false;
 		Application.Exit();
 		Environment.Exit(0);
@@ -58,7 +69,6 @@ class Program {
 		try {
 			var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
 			bool devMode = Array.Exists(args, arg => arg == AppConstants.ARG_DEV_MODE);
-			bool isStartup = Array.Exists(args, arg => arg == AppConstants.ARG_STARTUP);
 
 			Logger.Info($"Version: {version}");
 			Logger.Info($"Running from: {AppInstaller.GetCurrentExecutablePath()}");
@@ -167,10 +177,10 @@ class Program {
 					if (isDiscordRunning != wasDiscordRunning) {
 						if (isDiscordRunning) {
 							if (!hasInitialized) {
-								if (isStartup) {
-									audioManager.InitializeAndSaveConfigs();
-								}
+								audioManager.InitializeAndSaveConfigs();
 								hasInitialized = true;
+							} else {
+								audioManager.ApplyMuteSettings();
 							}
 						}
 						wasDiscordRunning = isDiscordRunning;

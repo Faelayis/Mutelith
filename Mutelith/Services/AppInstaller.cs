@@ -45,6 +45,7 @@ namespace Mutelith {
 
 				System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
 					FileName = AppConstants.INSTALL_PATH,
+					Arguments = $"{AppConstants.ARG_STARTUP} {AppConstants.ARG_SILENT_MODE}",
 					UseShellExecute = true
 				});
 

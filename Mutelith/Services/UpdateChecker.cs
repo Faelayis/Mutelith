@@ -163,12 +163,18 @@ namespace Mutelith {
 				Logger.Info("Starting update installation...");
 
 				string currentExePath = Process.GetCurrentProcess().MainModule?.FileName ?? "";
+				if (string.IsNullOrWhiteSpace(currentExePath)) {
+					Logger.Error("Cannot determine current executable path for update");
+					return;
+				}
+
+				string relaunchArgs = $"{AppConstants.ARG_STARTUP} {AppConstants.ARG_SILENT_MODE}";
 				string updateBatchPath = Path.Combine(Path.GetTempPath(), "update.bat");
 				string batchContent = $@"@echo off
 timeout /t 2 /nobreak > nul
 copy /y ""{tempPath}"" ""{currentExePath}""
 del ""{tempPath}""
-start """" ""{currentExePath}""
+start """" ""{currentExePath}"" {relaunchArgs}
 del ""%~f0""
 ";
 
