@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using Mutelith;
 using System;
 using System.Diagnostics;
@@ -10,6 +11,7 @@ class Program {
 	private static IAudioManager audioManager;
 	private static bool isRunning = true;
 	private static bool isSilent = false;
+	private static bool systemResumed = false;
 
 	[STAThread]
 	private static void Main(string[] args) {
@@ -43,12 +45,22 @@ class Program {
 			TrayIconManager.SetDevModeText(trayIcon);
 		}
 
+		SystemEvents.PowerModeChanged += OnPowerModeChanged;
+
 		_ = Task.Run(async () => await RunMonitoringLoop(args));
 		Application.Run();
 	}
 
+	private static void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e) {
+		if (e.Mode == PowerModes.Resume) {
+			Logger.Info("System resumed from sleep/hibernate. Flagging for re-initialization...");
+			systemResumed = true;
+		}
+	}
+
 	private static void OnExit() {
 		isRunning = false;
+		SystemEvents.PowerModeChanged -= OnPowerModeChanged;
 
 		try {
 			if (audioManager != null) {
@@ -104,6 +116,21 @@ class Program {
 
 			while (isRunning) {
 				try {
+					if (systemResumed) {
+						systemResumed = false;
+						Logger.Info("Processing system resume. Waiting for audio devices to stabilize...");
+						Thread.Sleep(3000);
+
+						if (audioManager != null) {
+							audioManager.RestoreSettings();
+							audioManager.Dispose();
+							audioManager = null;
+						}
+						currentDeviceType = AudioDeviceType.None;
+						hasInitialized = false;
+						continue;
+					}
+
 					AudioDeviceType detectedType = AudioDeviceDetector.DetectDefaultDevice(verbose: false);
 					var currentDiscordInstances = DiscordDetector.GetRunningInstances();
 					bool isDiscordRunning = currentDiscordInstances.Count > 0;
