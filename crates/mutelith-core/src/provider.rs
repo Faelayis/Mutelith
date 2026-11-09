@@ -9,7 +9,6 @@ const SONAR_CONTROLLER: &str = "SteelSeries Sonar Virtual Audio Device";
 
 const FXSOUND_PREFIX: &str = "FxSound";
 const FXSOUND_SPEAKERS: &str = "FxSound Speakers";
-const FXSOUND_CONTROLLER: &str = "FxSound Audio Enhancer";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Provider {
@@ -41,7 +40,7 @@ impl Provider {
 
 		if either(SONAR_CONTROLLER) {
 			Some(Self::SteelSeriesSonar)
-		} else if either(FXSOUND_CONTROLLER) || either(FXSOUND_PREFIX) {
+		} else if either(FXSOUND_PREFIX) {
 			Some(Self::FxSound)
 		} else {
 			None
