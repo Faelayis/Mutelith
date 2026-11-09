@@ -51,11 +51,17 @@ For [Windhawk](https://windhawk.net/) users. No separate app.
 
 While Discord is running, Mutelith checks the devices as soon as Windows reports a change (default device switched, device added or removed, an app opened a new audio session such as a screen share, someone unmuted a session Mutelith muted), and every 30 seconds as a safety net. If Windows audio notifications cannot be registered, it falls back to checking every 2 seconds. Each check does this:
 
-1. Mute Discord sessions on the provider's **target device** and on every device **outside** the provider (speakers, headphones).
+1. Mute Discord sessions on the provider's **target device** and on every device **outside** the provider (speakers, headphones). Only the mute changes, never the volume.
 2. Leave the provider's other virtual devices alone.
-3. On stop, or when the default device switches to another provider, unmute only the sessions Mutelith muted and give them back the volume they had before.
+3. On stop, or when the default device switches to another provider, unmute Discord on the devices the rule no longer covers.
 
-Discord, Discord PTB, and Discord Development are supported.
+With FxSound, `FxSound Speakers` is usually the only FxSound device, so every other output device is outside the provider and Discord is muted on all of them, voice chat included.
+
+Discord, Discord PTB, Discord Canary, and Discord Development are supported.
+
+### Windows remembers the mute
+
+The mute is Discord's per-app setting in the Volume Mixer, and Windows saves it for each output device, so it outlives Mutelith. Mutelith records each device it muted Discord on (the app in `HKEY_CURRENT_USER\Software\Mutelith\MutedEndpoints`, the mod in Windhawk's mod storage) and unmutes Discord there once the rule no longer covers it, including after a crash. Windows only allows that while Discord is running. If Discord is closed when Mutelith stops, Discord stays muted on those devices until Mutelith runs again with Discord open, or until you unmute Discord in the Volume Mixer.
 
 ## Project layout
 
@@ -75,7 +81,7 @@ windhawk/
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `--dev`             | Logs to a console. Skips install and update. Closes only other copies of the same exe.                                                     |
 | `--logs`            | Writes all messages to `%LOCALAPPDATA%\Mutelith\logs.txt` (errors are always written). The file is emptied on startup once it passes 1 MB. |
-| `--uninstall`       | Removes the startup and Programs and Features entries, then the install folder.                                                            |
+| `--uninstall`       | Unmutes Discord where Mutelith left it muted, removes the startup and Programs and Features entries and the muted device records, then the install folder. |
 | `--ghtoken <token>` | GitHub token for the update check.                                                                                                         |
 
 Unknown arguments, such as `--startup` and `--silent` from the startup entry, are ignored.
