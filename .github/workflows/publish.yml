@@ -1,0 +1,195 @@
+name: 🚀 Publish Release
+
+on:
+   workflow_dispatch:
+      inputs:
+         version_type:
+            description: "Version bump type"
+            required: true
+            default: "patch"
+            type: choice
+            options:
+               - patch
+               - minor
+               - major
+               - none
+         prerelease:
+            description: "Pre-Release"
+            required: true
+            default: true
+            type: boolean
+
+permissions:
+   contents: write
+
+jobs:
+   build-and-release:
+      runs-on: windows-latest
+
+      steps:
+         - name: Checkout code
+           uses: actions/checkout@v4
+           with:
+              fetch-depth: 0
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+         - name: Setup Rust
+           shell: pwsh
+           run: |
+              rustup toolchain install stable --profile minimal
+              rustup default stable
+              rustc --version
+
+         - name: Cache Rust build
+           uses: Swatinem/rust-cache@v2
+
+         - name: Get current version
+           id: current_version
+           shell: pwsh
+           run: |
+              $toml = Get-Content Cargo.toml -Raw
+              if ($toml -notmatch '(?ms)^\[workspace\.package\][^\[]*?^version\s*=\s*"([^"]+)"') {
+                throw "version not found in [workspace.package]"
+              }
+              $currentVersion = $Matches[1]
+              Write-Output "current=$currentVersion" >> $env:GITHUB_OUTPUT
+              Write-Host "Current version: $currentVersion"
+
+         - name: Calculate new version
+           id: new_version
+           shell: pwsh
+           run: |
+              $current = "${{ steps.current_version.outputs.current }}"
+              $versionType = "${{ github.event.inputs.version_type }}"
+
+              if ($versionType -eq "none") {
+                $newVersion = $current
+              } else {
+                $parts = $current.Split('.')
+                $major = [int]$parts[0]
+                $minor = [int]$parts[1]
+                $patch = [int]$parts[2]
+
+                switch ($versionType) {
+                  "major" {
+                    $major++
+                    $minor = 0
+                    $patch = 0
+                  }
+                  "minor" {
+                    $minor++
+                    $patch = 0
+                  }
+                  "patch" {
+                    $patch++
+                  }
+                }
+
+                $newVersion = "$major.$minor.$patch"
+              }
+
+              Write-Output "version=$newVersion" >> $env:GITHUB_OUTPUT
+              Write-Host "New version: $newVersion"
+
+         - name: Update version in Cargo.toml
+           if: github.event.inputs.version_type != 'none'
+           shell: pwsh
+           run: |
+              $newVersion = "${{ steps.new_version.outputs.version }}"
+              $toml = Get-Content Cargo.toml -Raw
+              $pattern = '(?ms)(^\[workspace\.package\][^\[]*?^version\s*=\s*")[^"]+(")'
+              $updated = [regex]::Replace($toml, $pattern, "`${1}$newVersion`${2}", 1)
+              if ($updated -eq $toml) { throw "version was not updated" }
+              [System.IO.File]::WriteAllText("Cargo.toml", $updated)
+              cargo update --workspace
+              Write-Host "Updated version to: $newVersion"
+
+         - name: Run tests
+           run: cargo test --release --locked
+
+         - name: Build application
+           run: cargo build --release --locked -p mutelith-app
+
+         - name: Collect executable
+           shell: pwsh
+           run: |
+              New-Item -ItemType Directory -Force publish | Out-Null
+              Copy-Item target/release/Mutelith.exe publish/Mutelith.exe
+              Get-Item publish/Mutelith.exe | Select-Object Name, Length
+
+         - name: Commit version changes
+           if: github.event.inputs.version_type != 'none'
+           uses: stefanzweifel/git-auto-commit-action@v7
+           with:
+              commit_message: Release v${{ steps.new_version.outputs.version }}
+              file_pattern: Cargo.toml Cargo.lock
+
+         - name: Generate changelog
+           if: github.event.inputs.version_type != 'none'
+           id: changelog
+           shell: bash
+           env:
+              GH_TOKEN: ${{ github.token }}
+           run: |
+              list_commits() {
+                git log "$@" --no-merges --format="%H%x09%h%x09%an%x09%s" |
+                while IFS=$'\t' read -r sha short name subject; do
+                  case "$subject" in "Release v"*) continue ;; esac
+                  login=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}" --jq '.author.login // empty' 2>/dev/null || true)
+                  if [ -n "$login" ]; then author="@${login}"; else author="$name"; fi
+                  echo "* ${subject} by ${author} (${short})"
+                done
+              }
+
+              PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+              if [ -z "$PREVIOUS_TAG" ]; then
+                ALL_COMMITS=$(list_commits HEAD)
+                echo "previous_tag=" >> $GITHUB_OUTPUT
+              else
+                ALL_COMMITS=$(list_commits "${PREVIOUS_TAG}..HEAD")
+                echo "previous_tag=${PREVIOUS_TAG}" >> $GITHUB_OUTPUT
+              fi
+
+              ADD_COMMITS=$(echo "$ALL_COMMITS" | grep "^* Add " || true)
+              UPDATE_COMMITS=$(echo "$ALL_COMMITS" | grep "^* Update " || true)
+              FIX_COMMITS=$(echo "$ALL_COMMITS" | grep "^* Fix " || true)
+              OTHER_COMMITS=$(echo "$ALL_COMMITS" | grep -v "^* Add " | grep -v "^* Update " | grep -v "^* Fix " || true)
+
+              CHANGELOG=""
+              [ -n "$ADD_COMMITS" ] && CHANGELOG="$ADD_COMMITS"
+              [ -n "$UPDATE_COMMITS" ] && CHANGELOG="$CHANGELOG"$'\n'"$UPDATE_COMMITS"
+              [ -n "$FIX_COMMITS" ] && CHANGELOG="$CHANGELOG"$'\n'"$FIX_COMMITS"
+              [ -n "$OTHER_COMMITS" ] && CHANGELOG="$CHANGELOG"$'\n'"$OTHER_COMMITS"
+
+              CHANGELOG=$(echo "$CHANGELOG" | sed '/^$/d')
+
+              echo "changelog<<EOF" >> $GITHUB_OUTPUT
+              echo "$CHANGELOG" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+
+         - name: Create GitHub Release
+           if: github.event.inputs.version_type != 'none'
+           uses: softprops/action-gh-release@v2
+           with:
+              tag_name: v${{ steps.new_version.outputs.version }}
+              name: v${{ steps.new_version.outputs.version }}
+              target_commitish: ${{ github.ref_name }}
+              body: |
+                 ## ✨ What's Changed
+                 ${{ steps.changelog.outputs.changelog }}
+
+                 ${{ steps.changelog.outputs.previous_tag && format('**Full Changelog**: https://github.com/{0}/compare/{1}...v{2}', github.repository, steps.changelog.outputs.previous_tag, steps.new_version.outputs.version) || '' }}
+              draft: false
+              prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+              files: |
+                 ./publish/Mutelith.exe
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+         - name: Upload Build Artifacts
+           uses: actions/upload-artifact@v4
+           with:
+              name: executables-v${{ steps.new_version.outputs.version }}
+              path: |
+                 ./publish/*.exe
+              retention-days: 30

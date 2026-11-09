@@ -1,0 +1,13 @@
+[package]
+name = "mutelith-core"
+description = "Core audio rules for Mutelith"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+log.workspace = true
+windows.workspace = true
+windows-core.workspace = true

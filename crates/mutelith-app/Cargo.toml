@@ -1,0 +1,21 @@
+[package]
+name = "mutelith-app"
+description = "Mutelith tray app: automatically fixes screen sharing echo issues"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# The release asset, process name and install path are all `Mutelith.exe`,
+# matching the C# app so that v0.2.x installs can update to this build.
+[[bin]]
+name = "Mutelith"
+path = "src/main.rs"
+
+[dependencies]
+log.workspace = true
+mutelith-core.workspace = true
+mutelith-update.workspace = true
+windows.workspace = true
+winreg = "0.56.0"
