@@ -6,6 +6,7 @@ pub mod discord;
 pub mod events;
 pub mod monitor;
 pub mod provider;
+pub mod store;
 pub mod viewer_echo;
 
 /// Case-insensitive substring match, like C# `OrdinalIgnoreCase` for device names.

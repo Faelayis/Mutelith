@@ -445,6 +445,7 @@ dependencies = [
  "log",
  "windows",
  "windows-core",
+ "winreg",
 ]
 
 [[package]]

@@ -1,7 +1,12 @@
 //! Rule `ViewerEcho`: mute Discord on every output device that causes echo for
 //! viewers, keep it on the provider's target device, and undo it on restore.
+//!
+//! Only the mute is changed, never the volume. Windows saves Discord's mute per
+//! output device, so every device Mutelith mutes on is recorded in [`store`]
+//! first, and passes that find a recorded device outside the rule unmute
+//! Discord there. That also undoes leftovers from an earlier unclean exit.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use windows::Win32::Media::Audio::{IAudioSessionControl, IAudioSessionEvents};
 use windows::core::Result;
@@ -10,23 +15,25 @@ use crate::audio::{self, Device, DeviceEnumerator};
 use crate::contains_ci;
 use crate::discord;
 use crate::provider::Provider;
+use crate::store;
 
-/// A muted Discord session: device name and process ID.
-type SessionKey = (String, u32);
+/// A muted Discord session: endpoint ID and session instance ID.
+type SessionKey = (String, String);
+
+struct Muted {
+	pid: u32,
+	/// Registered for volume events, unregistered when the entry goes away.
+	watched: Option<IAudioSessionControl>,
+}
 
 pub struct ViewerEcho {
 	provider: Provider,
 	enumerator: DeviceEnumerator,
-	/// Muted sessions and the volume each had before Mutelith muted it.
-	// shortcut: one volume per process and device, so several sessions of one
-	// process on one device all get the first one's volume back; key by
-	// session instance ID if that ever matters.
-	muted: HashMap<SessionKey, f32>,
+	muted: HashMap<SessionKey, Muted>,
 	last_count: Option<usize>,
 	/// Called when a muted session's volume or mute changes, so it is muted
 	/// again right away instead of on the next poll.
 	events: Option<IAudioSessionEvents>,
-	watched: Vec<IAudioSessionControl>,
 }
 
 impl ViewerEcho {
@@ -37,7 +44,6 @@ impl ViewerEcho {
 			muted: HashMap::new(),
 			last_count: None,
 			events,
-			watched: Vec::new(),
 		})
 	}
 
@@ -45,30 +51,30 @@ impl ViewerEcho {
 		self.provider
 	}
 
-	/// Forget earlier mutes, then apply.
-	pub fn initialize(&mut self) -> usize {
-		self.unwatch_all();
-		self.muted.clear();
-		self.apply()
-	}
+	/// Mute Discord where it causes echo, and unmute it on recorded devices the
+	/// rule no longer covers. `instances` are the running Discord processes.
+	/// Returns the number of muted sessions.
+	pub fn apply(&mut self, instances: &BTreeMap<u32, &str>) -> usize {
+		self.forget_exited(instances);
 
-	/// Mute Discord where it causes echo. Returns the number of muted sessions.
-	pub fn apply(&mut self) -> usize {
 		let (target, prefix) = (self.provider.target_device(), self.provider.device_prefix());
-		let Some((devices, names)) = self.devices() else {
+		let Some(devices) = list_devices(&self.enumerator) else {
 			return 0;
 		};
 
-		if !names.iter().any(|name| contains_ci(name, target)) {
+		if !devices.names.iter().any(|name| contains_ci(name, target)) {
 			log::warn!("{target} not found");
 			return 0;
 		}
 
-		let instances = discord::running_instances();
-		let count = mute_targets(&names, target, prefix)
-			.into_iter()
-			.map(|i| self.mute_in(&devices[i], &names[i], &instances))
+		let targets = mute_targets(&devices.names, target, prefix);
+		let count = targets
+			.iter()
+			.map(|&i| self.mute_in(&devices, i, instances))
 			.sum();
+
+		let keep: HashSet<&str> = targets.iter().map(|&i| devices.ids[i].as_str()).collect();
+		release_in(&devices, &keep, instances);
 
 		if self.last_count != Some(count) {
 			if count > 0 {
@@ -82,63 +88,20 @@ impl ViewerEcho {
 		count
 	}
 
-	/// Unmute every session this rule muted. Returns the number of unmuted sessions.
-	pub fn restore(&mut self) -> usize {
-		if self.muted.is_empty() {
-			return 0;
-		}
-
-		let (target, prefix) = (self.provider.target_device(), self.provider.device_prefix());
-		let count = match self.devices() {
-			Some((devices, names)) => {
-				let instances = discord::running_instances();
-				restore_targets(&names, target, prefix)
-					.into_iter()
-					.map(|i| self.unmute_in(&devices[i], &names[i], &instances))
-					.sum()
+	/// Drop entries for Discord processes that have exited.
+	pub fn forget_exited(&mut self, instances: &BTreeMap<u32, &str>) {
+		let events = self.events.as_ref();
+		self.muted.retain(|_, muted| {
+			let alive = instances.contains_key(&muted.pid);
+			if !alive {
+				unwatch(events, muted);
 			}
-			None => 0,
-		};
-
-		if count > 0 {
-			log::info!("Unmuted {count} Discord session(s)");
-		} else {
-			log::info!("No Discord sessions to unmute");
-		}
-
-		self.unwatch_all();
-		self.muted.clear();
-		self.last_count = None;
-		count
+			alive
+		});
 	}
 
-	fn unwatch_all(&mut self) {
-		if let Some(events) = &self.events {
-			for control in self.watched.drain(..) {
-				audio::unwatch(&control, events);
-			}
-		}
-	}
-
-	fn devices(&self) -> Option<(Vec<Device>, Vec<String>)> {
-		match self.enumerator.active_render_devices() {
-			Ok(devices) => {
-				let names = devices.iter().map(Device::friendly_name).collect();
-				Some((devices, names))
-			}
-			Err(err) => {
-				log::error!("Failed to list audio devices: {err}");
-				None
-			}
-		}
-	}
-
-	fn mute_in(
-		&mut self,
-		device: &Device,
-		device_name: &str,
-		instances: &BTreeMap<u32, &str>,
-	) -> usize {
+	fn mute_in(&mut self, devices: &Devices, i: usize, instances: &BTreeMap<u32, &str>) -> usize {
+		let (device, id, device_name) = (&devices.list[i], &devices.ids[i], &devices.names[i]);
 		let mut count = 0;
 
 		for session in device.sessions().unwrap_or_default() {
@@ -146,65 +109,39 @@ impl ViewerEcho {
 			let Some(name) = instances.get(&pid) else {
 				continue;
 			};
+			// An empty ID still mutes; it only shares one entry with other failures.
+			let instance = session.instance_id().unwrap_or_default();
 
-			let key = (device_name.to_owned(), pid);
+			let key = (id.clone(), instance);
 			let known = self.muted.contains_key(&key);
 			if known && session.is_muted() {
 				count += 1;
 				continue;
 			}
 
-			// Read before muting; a session muted again keeps its first saved volume.
-			let volume = session.volume_level().unwrap_or(1.0);
-			if session
-				.set_volume(0.0)
-				.and_then(|()| session.set_mute(true))
-				.is_err()
-			{
+			// Recorded first, so a crash right after muting still leaves a record.
+			store::record(name, id);
+			if session.set_mute(true).is_err() {
 				continue;
 			}
 
 			count += 1;
-			if !known {
-				self.muted.insert(key, volume);
-				log::info!("{name} (PID: {pid}) muted in {device_name}");
-				if let Some(events) = &self.events {
-					match session.watch(events) {
-						Ok(control) => self.watched.push(control),
-						Err(err) => log::warn!("Failed to watch {name} (PID: {pid}) volume: {err}"),
+			if known {
+				continue;
+			}
+
+			log::info!("{name} (PID: {pid}) muted in {device_name}");
+			let watched = self
+				.events
+				.as_ref()
+				.and_then(|events| match session.watch(events) {
+					Ok(control) => Some(control),
+					Err(err) => {
+						log::warn!("Failed to watch {name} (PID: {pid}) volume: {err}");
+						None
 					}
-				}
-			}
-		}
-
-		count
-	}
-
-	fn unmute_in(
-		&self,
-		device: &Device,
-		device_name: &str,
-		instances: &BTreeMap<u32, &str>,
-	) -> usize {
-		let mut count = 0;
-
-		for session in device.sessions().unwrap_or_default() {
-			let pid = session.process_id();
-			let Some(&volume) = self.muted.get(&(device_name.to_owned(), pid)) else {
-				continue;
-			};
-			let Some(name) = instances.get(&pid) else {
-				continue;
-			};
-
-			if session
-				.set_mute(false)
-				.and_then(|()| session.set_volume(volume))
-				.is_ok()
-			{
-				count += 1;
-				log::info!("{name} (PID: {pid}) unmuted in {device_name}");
-			}
+				});
+			self.muted.insert(key, Muted { pid, watched });
 		}
 
 		count
@@ -213,7 +150,98 @@ impl ViewerEcho {
 
 impl Drop for ViewerEcho {
 	fn drop(&mut self) {
-		self.unwatch_all();
+		let events = self.events.as_ref();
+		for muted in self.muted.values() {
+			unwatch(events, muted);
+		}
+	}
+}
+
+/// Unmute Discord on every recorded device whose endpoint ID is not in `keep`.
+/// Returns the number of unmuted sessions.
+pub fn release_leftovers(
+	enumerator: &DeviceEnumerator,
+	keep: &HashSet<&str>,
+	instances: &BTreeMap<u32, &str>,
+) -> usize {
+	list_devices(enumerator).map_or(0, |devices| release_in(&devices, keep, instances))
+}
+
+struct Devices {
+	list: Vec<Device>,
+	ids: Vec<String>,
+	names: Vec<String>,
+}
+
+fn list_devices(enumerator: &DeviceEnumerator) -> Option<Devices> {
+	match enumerator.active_render_devices() {
+		Ok(list) => {
+			let ids = list.iter().map(|d| d.id().unwrap_or_default()).collect();
+			let names = list.iter().map(Device::friendly_name).collect();
+			Some(Devices { list, ids, names })
+		}
+		Err(err) => {
+			log::error!("Failed to list audio devices: {err}");
+			None
+		}
+	}
+}
+
+fn release_in(devices: &Devices, keep: &HashSet<&str>, instances: &BTreeMap<u32, &str>) -> usize {
+	// Discord's saved mute can only be reached through a session of a running Discord.
+	if instances.is_empty() {
+		return 0;
+	}
+
+	let mut count = 0;
+	let leftovers = leftover_targets(
+		&devices.ids,
+		keep,
+		&discord::PROCESS_NAMES,
+		store::is_recorded,
+	);
+	for (i, app) in leftovers {
+		let (id, device_name) = (&devices.ids[i], &devices.names[i]);
+		let mut found = false;
+		let mut failed = false;
+
+		for session in devices.list[i].sessions().unwrap_or_default() {
+			let pid = session.process_id();
+			if instances.get(&pid) != Some(&app) {
+				continue;
+			}
+			found = true;
+			if !session.is_muted() {
+				continue;
+			}
+			match session.set_mute(false) {
+				Ok(()) => {
+					count += 1;
+					log::info!("{app} (PID: {pid}) unmuted in {device_name}");
+				}
+				Err(err) => {
+					failed = true;
+					log::warn!("Failed to unmute {app} (PID: {pid}) in {device_name}: {err}");
+				}
+			}
+		}
+
+		// Kept until a session of that Discord build shows up there, so its
+		// saved mute is undone.
+		if found && !failed {
+			store::forget(app, id);
+		}
+	}
+
+	if count > 0 {
+		log::info!("Unmuted {count} Discord session(s)");
+	}
+	count
+}
+
+fn unwatch(events: Option<&IAudioSessionEvents>, muted: &Muted) {
+	if let (Some(events), Some(control)) = (events, &muted.watched) {
+		audio::unwatch(control, events);
 	}
 }
 
@@ -229,15 +257,26 @@ fn mute_targets(names: &[String], target: &str, prefix: &str) -> Vec<usize> {
 	first_target.into_iter().chain(outside).collect()
 }
 
-/// Devices to unmute Discord on: every target device and every device outside
-/// the provider's prefix.
-fn restore_targets(names: &[String], target: &str, prefix: &str) -> Vec<usize> {
-	names
-		.iter()
-		.enumerate()
-		.filter(|(_, name)| contains_ci(name, target) || !contains_ci(name, prefix))
-		.map(|(i, _)| i)
-		.collect()
+/// Device and Discord build pairs to unmute: recorded ones whose device is not
+/// in `keep`. Windows saves the mute per app, so each build is its own record.
+fn leftover_targets<'a>(
+	ids: &[String],
+	keep: &HashSet<&str>,
+	apps: &[&'a str],
+	is_recorded: impl Fn(&str, &str) -> bool,
+) -> Vec<(usize, &'a str)> {
+	let mut targets = Vec::new();
+	for (i, id) in ids.iter().enumerate() {
+		if id.is_empty() || keep.contains(id.as_str()) {
+			continue;
+		}
+		for &app in apps {
+			if is_recorded(app, id) {
+				targets.push((i, app));
+			}
+		}
+	}
+	targets
 }
 
 #[cfg(test)]
@@ -266,15 +305,6 @@ mod tests {
 	}
 
 	#[test]
-	fn restore_covers_target_and_outside_devices() {
-		let p = Provider::SteelSeriesSonar;
-		assert_eq!(
-			restore_targets(&sonar_devices(), p.target_device(), p.device_prefix()),
-			vec![0, 3, 4]
-		);
-	}
-
-	#[test]
 	fn mute_without_target_only_outside_devices() {
 		let names = ["Speakers".to_string(), "FxSound Virtual".to_string()];
 		let p = Provider::FxSound;
@@ -282,5 +312,38 @@ mod tests {
 			mute_targets(&names, p.target_device(), p.device_prefix()),
 			vec![0]
 		);
+	}
+
+	#[test]
+	fn leftovers_are_recorded_devices_outside_keep() {
+		let ids = ["a", "b", "c", ""].map(String::from).to_vec();
+		let keep = HashSet::from(["a"]);
+		let recorded = |_: &str, id: &str| id == "a" || id == "c";
+		assert_eq!(
+			leftover_targets(&ids, &keep, &["Discord"], recorded),
+			vec![(2, "Discord")]
+		);
+	}
+
+	#[test]
+	fn leftovers_are_per_discord_build() {
+		let ids = ["a".to_string()];
+		let recorded = |app: &str, _: &str| app != "DiscordPTB";
+		assert_eq!(
+			leftover_targets(
+				&ids,
+				&HashSet::new(),
+				&["Discord", "DiscordPTB", "DiscordCanary"],
+				recorded
+			),
+			vec![(0, "Discord"), (0, "DiscordCanary")]
+		);
+	}
+
+	#[test]
+	fn no_leftovers_when_everything_is_kept() {
+		let ids = ["a", "b"].map(String::from).to_vec();
+		let keep = HashSet::from(["a", "b"]);
+		assert!(leftover_targets(&ids, &keep, &["Discord"], |_, _| true).is_empty());
 	}
 }

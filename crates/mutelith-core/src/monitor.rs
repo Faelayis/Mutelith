@@ -4,7 +4,7 @@
 //! Core Audio notifications wake the loop as soon as something changes; the
 //! slow poll is a safety net for events that never arrive.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -16,7 +16,7 @@ use crate::audio::DeviceEnumerator;
 use crate::discord;
 use crate::events::Events;
 use crate::provider::Provider;
-use crate::viewer_echo::ViewerEcho;
+use crate::viewer_echo::{self, ViewerEcho};
 
 /// Wait between ticks when notifications are working.
 // shortcut: no session volume events, so a user who unmutes Discord by hand is
@@ -43,7 +43,6 @@ pub struct Monitor {
 	enumerator: DeviceEnumerator,
 	provider: Option<Provider>,
 	rule: Option<ViewerEcho>,
-	initialized: bool,
 	last_instances: BTreeMap<u32, &'static str>,
 	wake: Arc<AtomicBool>,
 	events: Option<Events>,
@@ -56,7 +55,6 @@ impl Monitor {
 			enumerator: DeviceEnumerator::new()?,
 			provider: None,
 			rule: None,
-			initialized: false,
 			last_instances: BTreeMap::new(),
 			events: register_events(&wake),
 			wake,
@@ -78,28 +76,29 @@ impl Monitor {
 
 		let detected = Provider::detect_default(&self.enumerator);
 		let instances = discord::running_instances();
-		let discord_running = !instances.is_empty();
-		self.log_discord_changes(instances);
+		self.log_discord_changes(&instances);
 
 		if detected != self.provider {
 			log::info!(
 				"Default device changed from {:?} to {detected:?}",
 				self.provider
 			);
-			// Undo the old rule's mutes, which the new rule does not know about.
-			if let Some(mut rule) = self.rule.take() {
-				rule.restore();
-			}
+			// Nothing is unmuted here: the new rule's pass unmutes Discord on the
+			// recorded devices it does not cover, without a gap on the others.
+			self.rule = None;
 			self.provider = detected;
-			self.initialized = false;
-
-			if self.create_rule() && discord_running {
-				self.initialize();
-			}
 		}
 
-		if (self.rule.is_some() || self.create_rule()) && discord_running {
-			self.initialize_or_apply();
+		if self.create_rule()
+			&& let Some(rule) = self.rule.as_mut()
+		{
+			if instances.is_empty() {
+				rule.forget_exited(&instances);
+			} else {
+				rule.apply(&instances);
+			}
+		} else {
+			viewer_echo::release_leftovers(&self.enumerator, &HashSet::new(), &instances);
 		}
 
 		if self.events.is_some() {
@@ -109,21 +108,22 @@ impl Monitor {
 		}
 	}
 
-	/// Undo all mutes and start over, e.g. after the system resumes from sleep.
-	/// Notifications are registered again, in case the audio service restarted.
+	/// Start over with fresh notifications, e.g. after the system resumes from
+	/// sleep, in case the audio service restarted. Mutes stay in place, so
+	/// Discord is not heard on the speakers in between.
 	pub fn reset(&mut self) {
-		self.restore();
 		self.rule = None;
 		self.provider = None;
-		self.initialized = false;
 		self.events = None;
 		self.events = register_events(&self.wake);
 	}
 
-	/// Unmute every Discord session this monitor muted.
+	/// Unmute Discord on every device where Mutelith muted it.
 	pub fn restore(&mut self) {
-		if let Some(rule) = self.rule.as_mut() {
-			rule.restore();
+		self.rule = None;
+		let instances = discord::running_instances();
+		if viewer_echo::release_leftovers(&self.enumerator, &HashSet::new(), &instances) == 0 {
+			log::info!("No Discord sessions to unmute");
 		}
 	}
 
@@ -144,33 +144,18 @@ impl Monitor {
 		self.rule.is_some()
 	}
 
-	fn initialize(&mut self) {
-		if let Some(rule) = self.rule.as_mut() {
-			rule.initialize();
-			self.initialized = true;
-		}
-	}
-
-	fn initialize_or_apply(&mut self) {
-		if !self.initialized {
-			self.initialize();
-		} else if let Some(rule) = self.rule.as_mut() {
-			rule.apply();
-		}
-	}
-
-	fn log_discord_changes(&mut self, instances: BTreeMap<u32, &'static str>) {
+	fn log_discord_changes(&mut self, instances: &BTreeMap<u32, &'static str>) {
 		for (pid, name) in &self.last_instances {
 			if !instances.contains_key(pid) {
 				log::info!("{name} (PID: {pid}) stopped");
 			}
 		}
-		for (pid, name) in &instances {
+		for (pid, name) in instances {
 			if !self.last_instances.contains_key(pid) {
 				log::info!("{name} (PID: {pid}) started");
 			}
 		}
-		self.last_instances = instances;
+		self.last_instances = instances.clone();
 	}
 }
 

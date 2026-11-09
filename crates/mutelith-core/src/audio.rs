@@ -128,12 +128,18 @@ impl Session {
 		unsafe { self.volume()?.SetMute(mute, std::ptr::null()) }
 	}
 
-	pub fn volume_level(&self) -> Result<f32> {
-		unsafe { self.volume()?.GetMasterVolume() }
-	}
-
-	pub fn set_volume(&self, level: f32) -> Result<()> {
-		unsafe { self.volume()?.SetMasterVolume(level, std::ptr::null()) }
+	/// Identifies this session instance, unlike the process ID, which several
+	/// sessions of one process share. Treat it as opaque.
+	pub fn instance_id(&self) -> Result<String> {
+		unsafe {
+			let id = self
+				.0
+				.cast::<IAudioSessionControl2>()?
+				.GetSessionInstanceIdentifier()?;
+			let text = id.to_string();
+			CoTaskMemFree(Some(id.0 as _));
+			Ok(text?)
+		}
 	}
 
 	/// Call `events` when this session's volume or mute changes. Keep the

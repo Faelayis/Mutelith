@@ -12,12 +12,14 @@ mod theme;
 mod tray;
 mod update;
 
+use std::collections::HashSet;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 
-use mutelith_core::audio::ComGuard;
+use mutelith_core::audio::{ComGuard, DeviceEnumerator};
 use mutelith_core::monitor::{Monitor, RESUME_SETTLE_DELAY, sleep_unless};
+use mutelith_core::{discord, store, viewer_echo};
 use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AllocConsole, AttachConsole};
 use windows::Win32::UI::WindowsAndMessaging::{
 	MB_ICONERROR, MB_OK, MESSAGEBOX_RESULT, MESSAGEBOX_STYLE, MessageBoxW,
@@ -45,6 +47,7 @@ fn main() {
 	instance::close_previous_instances(args.dev);
 
 	if args.uninstall {
+		release_leftovers();
 		install::uninstall();
 		return;
 	}
@@ -131,6 +134,18 @@ fn worker() {
 
 	monitor.restore();
 	log::info!("Stopped monitoring");
+}
+
+/// Unmute Discord on the devices where Mutelith left it muted, then forget them.
+fn release_leftovers() {
+	let Ok(_com) = ComGuard::init() else {
+		return;
+	};
+	if let Ok(enumerator) = DeviceEnumerator::new() {
+		let instances = discord::running_instances();
+		viewer_echo::release_leftovers(&enumerator, &HashSet::new(), &instances);
+	}
+	store::clear();
 }
 
 fn attach_console() {

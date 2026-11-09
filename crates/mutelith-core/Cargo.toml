@@ -11,3 +11,4 @@ repository.workspace = true
 log.workspace = true
 windows.workspace = true
 windows-core.workspace = true
+winreg = "0.56.0"
