@@ -9,7 +9,12 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 };
 
 /// Process names without `.exe`, as the C# version matched them.
-pub const PROCESS_NAMES: [&str; 3] = ["Discord", "DiscordPTB", "DiscordDevelopment"];
+pub const PROCESS_NAMES: [&str; 4] = [
+	"Discord",
+	"DiscordPTB",
+	"DiscordCanary",
+	"DiscordDevelopment",
+];
 
 /// Canonical Discord process name for an executable file name, if it is one.
 pub fn discord_name(exe_file: &str) -> Option<&'static str> {
@@ -61,6 +66,7 @@ mod tests {
 	fn matches_discord_variants() {
 		assert_eq!(discord_name("Discord.exe"), Some("Discord"));
 		assert_eq!(discord_name("discordptb.EXE"), Some("DiscordPTB"));
+		assert_eq!(discord_name("DiscordCanary.exe"), Some("DiscordCanary"));
 		assert_eq!(
 			discord_name("DiscordDevelopment.exe"),
 			Some("DiscordDevelopment")
