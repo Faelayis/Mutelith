@@ -19,9 +19,6 @@ use crate::provider::Provider;
 use crate::viewer_echo::{self, ViewerEcho};
 
 /// Wait between ticks when notifications are working.
-// shortcut: no session volume events, so a user who unmutes Discord by hand is
-// muted again on the next poll, up to this long later; register
-// IAudioSessionEvents on muted sessions if that delay matters.
 pub const FALLBACK_POLL_INTERVAL: Duration = Duration::from_secs(30);
 /// Wait between ticks when notifications could not be registered.
 pub const POLL_INTERVAL: Duration = Duration::from_secs(2);

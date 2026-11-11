@@ -116,12 +116,16 @@ impl Session {
 			.unwrap_or(0)
 	}
 
-	pub fn is_muted(&self) -> bool {
+	/// Whether the session is muted, or the error when it cannot be read.
+	pub fn muted(&self) -> Result<bool> {
 		self
 			.volume()
 			.and_then(|v| unsafe { v.GetMute() })
 			.map(|m| m.as_bool())
-			.unwrap_or(false)
+	}
+
+	pub fn is_muted(&self) -> bool {
+		self.muted().unwrap_or(false)
 	}
 
 	pub fn set_mute(&self, mute: bool) -> Result<()> {

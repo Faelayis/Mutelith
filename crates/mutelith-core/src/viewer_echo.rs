@@ -30,7 +30,11 @@ pub struct ViewerEcho {
 	provider: Provider,
 	enumerator: DeviceEnumerator,
 	muted: HashMap<SessionKey, Muted>,
+	/// Sessions already muted by the user; left alone.
+	user_muted: HashSet<SessionKey>,
 	last_count: Option<usize>,
+	/// The target device was missing on the last pass, and that was logged.
+	target_missing: bool,
 	/// Called when a muted session's volume or mute changes, so it is muted
 	/// again right away instead of on the next poll.
 	events: Option<IAudioSessionEvents>,
@@ -42,7 +46,9 @@ impl ViewerEcho {
 			provider,
 			enumerator: DeviceEnumerator::new()?,
 			muted: HashMap::new(),
+			user_muted: HashSet::new(),
 			last_count: None,
+			target_missing: false,
 			events,
 		})
 	}
@@ -63,9 +69,15 @@ impl ViewerEcho {
 		};
 
 		if !devices.names.iter().any(|name| contains_ci(name, target)) {
-			log::warn!("{target} not found");
+			if !self.target_missing {
+				log::warn!("{target} not found");
+				self.target_missing = true;
+				// The session count is logged again once the device is back.
+				self.last_count = None;
+			}
 			return 0;
 		}
+		self.target_missing = false;
 
 		let targets = mute_targets(&devices.names, target, prefix);
 		let count = targets
@@ -114,9 +126,20 @@ impl ViewerEcho {
 
 			let key = (id.clone(), instance);
 			let known = self.muted.contains_key(&key);
-			if known && session.is_muted() {
+			let muted = session.muted().ok();
+			if known && muted == Some(true) {
 				count += 1;
 				continue;
+			}
+			if !known && let Some(muted) = muted {
+				let seen = self.user_muted.contains(&key);
+				if is_user_mute(muted, seen, || store::is_recorded(name, id)) {
+					self.user_muted.insert(key);
+					continue;
+				}
+				if !muted {
+					self.user_muted.remove(&key);
+				}
 			}
 
 			// Recorded first, so a crash right after muting still leaves a record.
@@ -245,6 +268,13 @@ fn unwatch(events: Option<&IAudioSessionEvents>, muted: &Muted) {
 	}
 }
 
+/// Whether a muted session Mutelith did not mute belongs to the user and is
+/// left alone. `seen` is an earlier pass's answer for this session. A record
+/// for the device means the mute is Mutelith's own leftover.
+fn is_user_mute(muted: bool, seen: bool, recorded: impl FnOnce() -> bool) -> bool {
+	muted && (seen || !recorded())
+}
+
 /// Devices to mute Discord on: the first target device, then every device
 /// outside the provider's prefix.
 fn mute_targets(names: &[String], target: &str, prefix: &str) -> Vec<usize> {
@@ -312,6 +342,19 @@ mod tests {
 			mute_targets(&names, p.target_device(), p.device_prefix()),
 			vec![0]
 		);
+	}
+
+	#[test]
+	fn user_mute_is_a_mute_without_a_record() {
+		assert!(is_user_mute(true, false, || false));
+		assert!(!is_user_mute(true, false, || true));
+		assert!(!is_user_mute(false, false, || false));
+	}
+
+	#[test]
+	fn user_mute_stays_after_a_record_appears() {
+		assert!(is_user_mute(true, true, || true));
+		assert!(!is_user_mute(false, true, || true));
 	}
 
 	#[test]

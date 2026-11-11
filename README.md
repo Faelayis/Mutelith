@@ -61,7 +61,7 @@ Discord, Discord PTB, Discord Canary, and Discord Development are supported.
 
 ### Windows remembers the mute
 
-The mute is Discord's per-app setting in the Volume Mixer, and Windows saves it for each output device, so it outlives Mutelith. Mutelith records each device it muted Discord on (the app in `HKEY_CURRENT_USER\Software\Mutelith\MutedEndpoints`, the mod in Windhawk's mod storage) and unmutes Discord there once the rule no longer covers it, including after a crash. Windows only allows that while Discord is running. If Discord is closed when Mutelith stops, Discord stays muted on those devices until Mutelith runs again with Discord open, or until you unmute Discord in the Volume Mixer.
+The mute is Discord's per-app setting in the Volume Mixer, and Windows saves it for each output device, so it outlives Mutelith. Mutelith records each device it muted Discord on (the app in `HKEY_CURRENT_USER\Software\Mutelith\MutedEndpoints`, the mod in Windhawk's mod storage) and unmutes Discord there once the rule no longer covers it, including after a crash. Windows only allows that while Discord is running and has an audio session on that device. If Discord isn't listed for a device in the Volume Mixer when Mutelith stops, Discord stays muted there until Mutelith runs again while Discord is playing audio on that device, or until you unmute Discord in the Volume Mixer. A mute you set yourself in the Volume Mixer is left alone.
 
 ## Project layout
 
