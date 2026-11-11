@@ -38,11 +38,12 @@ To uninstall, use **Programs and Features**, or run `Mutelith.exe --uninstall`.
 
 ### Windhawk mod
 
-For [Windhawk](https://windhawk.net/) users. No separate app.
+For [Windhawk](https://windhawk.net/) users. No separate app. The mod is published as [Mutelith on Windhawk](https://windhawk.net/mods/mutelith).
 
-1. In Windhawk, choose **Create a New Mod**.
-2. Replace the code with [`windhawk/mutelith.wh.cpp`](./windhawk/mutelith.wh.cpp).
-3. Click **Compile Mod**, then enable it.
+1. In Windhawk, open **Explore** and search for **Mutelith**.
+2. Open the mod's **Details**, then click **Install**.
+
+To run the version in this repository instead, choose **Create a New Mod** in Windhawk, replace the code with [`windhawk/mutelith.wh.cpp`](./windhawk/mutelith.wh.cpp), and click **Compile Mod**.
 
 > [!NOTE]
 > Use one or the other, not both. While `Mutelith.exe` is running, the mod stays idle.
@@ -72,7 +73,7 @@ crates/
   mutelith-update/ # library: auto-update from GitHub releases
   mutelith-cli/    # command-line harness for testing the libraries on a real machine
 windhawk/
-  mutelith.wh.cpp  # the same rule as a Windhawk tool mod (C++, one file)
+  mutelith.wh.cpp  # the same rule as a Windhawk tool mod (C++, one file), published at windhawk.net/mods/mutelith
 ```
 
 ## Arguments
